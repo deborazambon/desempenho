@@ -1,5 +1,4 @@
 <!DOCTYPE html>
-
 <html lang="pt-BR">
 <head>
 <meta charset="UTF-8" />
@@ -15,7 +14,6 @@
 <link href="https://fonts.googleapis.com/css2?family=Anton&family=Mulish:wght@400;600;700;800&display=swap" rel="stylesheet" />
 
 <script src="https://cdn.tailwindcss.com"></script>
-
 <script>
   tailwind.config = {
     theme: {
@@ -70,11 +68,8 @@
 </style>
 
 <script crossorigin src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
-
 <script crossorigin src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
-
 <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
-
 </head>
 <body>
 <div id="root"></div>
@@ -403,14 +398,31 @@ function getLastSync() {
 }
 
 /* =========================================================================
-   AUTENTICAÇÃO POR SENHA (nível 2 — hash do time)
-   Senha do time: definida via SHA-256 abaixo. Para mudar, gera novo hash.
-   Hash atual = sha256("bigode2026") — combine outra senha com o time e me peça novo hash.
+   AUTENTICAÇÃO POR SENHA (nível 2 — hash do time, com 2 níveis de acesso)
+   - Master: vê e edita TUDO (todos os cargos)
+   - Gerencial: vê e edita só até Líder + Aux. administrativo
    ========================================================================= */
 
-const SENHA_HASH = '103bba885a214e0e646f0753593839616dbc44e8cb767087d88ca5a0005864b9';
-// Hash SHA-256 de: Cachorro@RH2026
-// Pra trocar a senha, peça pra Claude gerar novo hash da nova senha e substituir aqui.
+const SENHAS = {
+  master:    '8389a5fd6ca475ae12d88ba321b1775f90dda2565d610e7e4e86632c9916db08', // Bigode@original1972
+  gerencial: '103bba885a214e0e646f0753593839616dbc44e8cb767087d88ca5a0005864b9', // Cachorro@RH2026
+};
+
+// Cargos que o nível GERENCIAL pode ver/editar
+const CARGOS_GERENCIAL = ['Atendente', 'Auxiliar de cozinha', 'Monitor', 'Líder de equipe', 'Auxiliar administrativo'];
+
+// Verifica se o usuário atual pode acessar determinado cargo
+function podeAcessarCargo(cargo, nivel) {
+  if (nivel === 'master') return true;
+  if (nivel === 'gerencial') return CARGOS_GERENCIAL.includes(cargo);
+  return false;
+}
+
+// Filtra lista de colaboradores conforme permissão
+function filtrarColabsPorNivel(colaboradores, nivel) {
+  if (nivel === 'master') return colaboradores;
+  return colaboradores.filter(c => podeAcessarCargo(c.cargo, nivel));
+}
 
 const AUTH_KEY = 'cdb_auth_ok';
 const AUTH_TTL_MS = 30 * 24 * 60 * 60 * 1000; // 30 dias
@@ -421,17 +433,34 @@ async function sha256Hex(str) {
   return Array.from(new Uint8Array(hash)).map(b => b.toString(16).padStart(2, '0')).join('');
 }
 
-function isAuthValid() {
-  try {
-    const raw = localStorage.getItem(AUTH_KEY);
-    if (!raw) return false;
-    const { ts } = JSON.parse(raw);
-    return (Date.now() - ts) < AUTH_TTL_MS;
-  } catch { return false; }
+// Retorna o nível ('master', 'gerencial') ou null se não bater
+async function identificarNivel(senha) {
+  const hash = await sha256Hex(senha.trim());
+  if (hash === SENHAS.master) return 'master';
+  if (hash === SENHAS.gerencial) return 'gerencial';
+  return null;
 }
 
-function setAuthValid() {
-  localStorage.setItem(AUTH_KEY, JSON.stringify({ ts: Date.now() }));
+function getAuthInfo() {
+  try {
+    const raw = localStorage.getItem(AUTH_KEY);
+    if (!raw) return null;
+    const info = JSON.parse(raw);
+    if ((Date.now() - info.ts) >= AUTH_TTL_MS) return null;
+    return info; // { ts, nivel }
+  } catch { return null; }
+}
+
+function isAuthValid() {
+  return !!getAuthInfo();
+}
+
+function getNivelAtual() {
+  return getAuthInfo()?.nivel || null;
+}
+
+function setAuthValid(nivel) {
+  localStorage.setItem(AUTH_KEY, JSON.stringify({ ts: Date.now(), nivel }));
 }
 
 function clearAuth() {
@@ -513,7 +542,7 @@ function Bar({ value, max=5 }) {
    5. COMPONENTE: HEADER + NAV
    ========================================================================= */
 
-function Header({ tab, setTab, syncStatus, sheetsActive, onLogout }) {
+function Header({ tab, setTab, syncStatus, sheetsActive, onLogout, nivel }) {
   const tabs = [
     { id: 'dashboard',   label: 'Dashboard' },
     { id: 'colab',       label: 'Colaboradores' },
@@ -530,11 +559,18 @@ function Header({ tab, setTab, syncStatus, sheetsActive, onLogout }) {
     : syncStatus === 'ok' ? 'sincronizado'
     : syncStatus === 'offline' ? 'offline'
     : 'conectado';
+  const nivelIcon = nivel === 'master' ? '👑' : '👤';
+  const nivelText = nivel === 'master' ? 'Master' : 'Gerencial';
   return (
     <header className="bg-bordo diag-text border-b-4 border-amarelo sticky top-0 z-40">
       <div className="max-w-6xl mx-auto px-4 py-3 flex items-center justify-between gap-2">
         <Logo />
-        <div className="flex items-center gap-3">
+        <div className="flex items-center gap-2">
+          {nivel && (
+            <span className="hidden sm:inline-flex items-center gap-1 px-2 py-1 rounded-lg bg-amarelo/20 text-amarelo text-xs font-bold border border-amarelo/30">
+              <span>{nivelIcon}</span><span>{nivelText}</span>
+            </span>
+          )}
           {sheetsActive && (
             <button onClick={() => setTab('config')}
               title={`Status: ${syncText}`}
@@ -553,11 +589,10 @@ function Header({ tab, setTab, syncStatus, sheetsActive, onLogout }) {
           </nav>
         </div>
       </div>
-      {sheetsActive && (
-        <div className="sm:hidden bg-bordo/50 text-amarelo text-xs text-center py-1 border-t border-amarelo/20">
-          {syncIcon} {syncText}
-        </div>
-      )}
+      <div className="sm:hidden bg-bordo/50 text-amarelo text-xs text-center py-1 border-t border-amarelo/20 flex items-center justify-center gap-3">
+        {nivel && <span>{nivelIcon} {nivelText}</span>}
+        {sheetsActive && <span>{syncIcon} {syncText}</span>}
+      </div>
       <nav className="md:hidden flex overflow-x-auto scrollbar-thin border-t border-amarelo/20">
         {tabs.map(t => (
           <button key={t.id} onClick={() => setTab(t.id)}
@@ -575,8 +610,9 @@ function Header({ tab, setTab, syncStatus, sheetsActive, onLogout }) {
    6. PÁGINA: DASHBOARD
    ========================================================================= */
 
-function Dashboard({ state, setTab, setSelectedId }) {
-  const colabs = state.colaboradores.filter(c => c.ativo !== false);
+function Dashboard({ state, setTab, setSelectedId, nivel }) {
+  const todosColabs = state.colaboradores.filter(c => c.ativo !== false);
+  const colabs = filtrarColabsPorNivel(todosColabs, nivel);
   const total = colabs.length;
 
   const todasAvaliacoes = colabs.flatMap(c => (c.avaliacoes || []).map(a => ({ ...a, colab: c })));
@@ -733,23 +769,45 @@ function Dashboard({ state, setTab, setSelectedId }) {
    7. PÁGINA: LISTA / DETALHE DE COLABORADORES
    ========================================================================= */
 
-function ListaColaboradores({ state, dispatch, selectedId, setSelectedId, setTab }) {
+function ListaColaboradores({ state, dispatch, selectedId, setSelectedId, setTab, nivel }) {
   const [busca, setBusca] = useState('');
   const [filtroCargo, setFiltroCargo] = useState('todos');
   const [showForm, setShowForm] = useState(false);
 
+  // Cargos visíveis pra esse nível
+  const cargosVisiveis = nivel === 'master' ? CARGO_LISTA : CARGOS_GERENCIAL;
+
   const lista = state.colaboradores
     .filter(c => c.ativo !== false)
+    .filter(c => podeAcessarCargo(c.cargo, nivel))
     .filter(c => filtroCargo === 'todos' || c.cargo === filtroCargo)
     .filter(c => c.nome.toLowerCase().includes(busca.toLowerCase()));
 
   const sel = state.colaboradores.find(c => c.id === selectedId);
+  // Bloqueia acesso direto a colaborador de cargo restrito (e.g. URL antiga, sync)
+  const selBloqueado = sel && !podeAcessarCargo(sel.cargo, nivel);
+  if (sel && selBloqueado) {
+    return (
+      <div className="max-w-2xl mx-auto px-4 py-10">
+        <div className="bg-red-50 border-2 border-red-300 rounded-2xl p-6 text-center">
+          <div className="text-5xl mb-3">🔒</div>
+          <h2 className="font-display text-2xl text-red-800">ACESSO RESTRITO</h2>
+          <p className="text-sm text-red-800/80 mt-2">
+            Este colaborador é de um cargo que não está disponível pro acesso gerencial. Apenas o acesso master pode visualizar.
+          </p>
+          <button onClick={() => setSelectedId(null)}
+            className="mt-4 px-4 py-2 bg-bordo text-amarelo font-display tracking-wider rounded-xl">VOLTAR</button>
+        </div>
+      </div>
+    );
+  }
 
   if (sel) {
     return <DetalheColaborador
       colab={sel} state={state} dispatch={dispatch}
       voltar={() => setSelectedId(null)}
       setTab={setTab}
+      nivel={nivel}
     />;
   }
 
@@ -770,7 +828,7 @@ function ListaColaboradores({ state, dispatch, selectedId, setSelectedId, setTab
         <select value={filtroCargo} onChange={e => setFiltroCargo(e.target.value)}
           className="px-4 py-2 rounded-xl border-2 border-bordo/20 focus:border-vermelho focus:outline-none bg-white font-semibold text-bordo">
           <option value="todos">Todos os cargos</option>
-          {CARGO_LISTA.map(c => <option key={c} value={c}>{c}</option>)}
+          {cargosVisiveis.map(c => <option key={c} value={c}>{c}</option>)}
         </select>
       </div>
 
@@ -814,6 +872,7 @@ function ListaColaboradores({ state, dispatch, selectedId, setSelectedId, setTab
       )}
 
       {showForm && <FormColaborador
+        nivel={nivel}
         onClose={() => setShowForm(false)}
         onSave={(novo) => { dispatch({ type: 'ADD_COLAB', payload: novo }); setShowForm(false); }}
       />}
@@ -821,9 +880,10 @@ function ListaColaboradores({ state, dispatch, selectedId, setSelectedId, setTab
   );
 }
 
-function FormColaborador({ onClose, onSave, colab }) {
+function FormColaborador({ onClose, onSave, colab, nivel }) {
+  const cargosDisponiveis = nivel === 'master' ? CARGO_LISTA : CARGOS_GERENCIAL;
   const [nome, setNome] = useState(colab?.nome || '');
-  const [cargo, setCargo] = useState(colab?.cargo || CARGO_LISTA[0]);
+  const [cargo, setCargo] = useState(colab?.cargo || cargosDisponiveis[0]);
   const [dataInicio, setDataInicio] = useState(colab?.dataInicio || '');
   const [unidade, setUnidade] = useState(colab?.unidade || '');
   const [cpf, setCpf] = useState(colab?.cpf || '');
@@ -854,7 +914,7 @@ function FormColaborador({ onClose, onSave, colab }) {
             <label className="text-xs uppercase font-bold text-bordo/70">Cargo *</label>
             <select value={cargo} onChange={e => setCargo(e.target.value)}
               className="w-full px-3 py-2 rounded-lg border-2 border-bordo/20 focus:border-vermelho focus:outline-none bg-white">
-              {CARGO_LISTA.map(c => <option key={c} value={c}>{c}</option>)}
+              {cargosDisponiveis.map(c => <option key={c} value={c}>{c}</option>)}
             </select>
           </div>
           <div className="grid grid-cols-2 gap-3">
@@ -991,7 +1051,7 @@ function AutoAvaliacaoModal({ colab, onClose, dispatch }) {
    8. PÁGINA: DETALHE DE COLABORADOR
    ========================================================================= */
 
-function DetalheColaborador({ colab, state, dispatch, voltar, setTab }) {
+function DetalheColaborador({ colab, state, dispatch, voltar, setTab, nivel }) {
   const [editando, setEditando] = useState(false);
   const [verAval, setVerAval] = useState(null);
   const [autoModal, setAutoModal] = useState(false);
@@ -1133,7 +1193,7 @@ function DetalheColaborador({ colab, state, dispatch, voltar, setTab }) {
         </>
       )}
 
-      {editando && <FormColaborador colab={colab} onClose={() => setEditando(false)}
+      {editando && <FormColaborador colab={colab} nivel={nivel} onClose={() => setEditando(false)}
         onSave={(c) => { dispatch({ type: 'UPDATE_COLAB', payload: c }); setEditando(false); }} />}
       {verAval && <ModalVerAvaliacao avaliacao={verAval} colab={colab} onClose={() => setVerAval(null)} dispatch={dispatch} />}
       {autoModal && <AutoAvaliacaoModal colab={colab} onClose={() => setAutoModal(false)} dispatch={dispatch} />}
@@ -1291,8 +1351,8 @@ function RowCriterio({ label, nota, notaAuto }) {
    9. PÁGINA: NOVA AVALIAÇÃO
    ========================================================================= */
 
-function NovaAvaliacao({ state, dispatch, setTab, setSelectedId }) {
-  const ativos = state.colaboradores.filter(c => c.ativo !== false);
+function NovaAvaliacao({ state, dispatch, setTab, setSelectedId, nivel }) {
+  const ativos = state.colaboradores.filter(c => c.ativo !== false && podeAcessarCargo(c.cargo, nivel));
   const [colabId, setColabId] = useState(ativos[0]?.id || '');
   const colab = state.colaboradores.find(c => c.id === colabId);
 
@@ -1553,7 +1613,7 @@ function CriterioInput({ criterio, valor, notaAuto, onChange }) {
    10. PÁGINA: CONFIGURAÇÕES (export/import + inativos)
    ========================================================================= */
 
-function Configuracoes({ state, dispatch, onLogout }) {
+function Configuracoes({ state, dispatch, onLogout, nivel }) {
   const fileRef = useRef(null);
 
   const importar = (e) => {
@@ -1582,14 +1642,42 @@ function Configuracoes({ state, dispatch, onLogout }) {
     URL.revokeObjectURL(url);
   };
 
-  const inativos = state.colaboradores.filter(c => c.ativo === false);
+  const inativos = state.colaboradores
+    .filter(c => c.ativo === false)
+    .filter(c => podeAcessarCargo(c.cargo, nivel));
 
   return (
     <div className="max-w-3xl mx-auto px-4 py-6 space-y-5">
       <h1 className="font-display text-5xl text-bordo">CONFIGURAÇÕES</h1>
 
-      {/* SINCRONIZAÇÃO AUTOMÁTICA COM GOOGLE SHEETS */}
-      <SecaoSyncSheets state={state} dispatch={dispatch} />
+      {/* Badge do nível */}
+      <div className={`rounded-2xl p-4 flex items-center gap-3 ${
+        nivel === 'master' ? 'bg-amarelo/20 border-2 border-amarelo' : 'bg-azulCDB/20 border-2 border-azulCDB'
+      }`}>
+        <div className="text-3xl">{nivel === 'master' ? '👑' : '👤'}</div>
+        <div>
+          <div className="font-display text-xl text-bordo">
+            {nivel === 'master' ? 'ACESSO MASTER' : 'ACESSO GERENCIAL'}
+          </div>
+          <p className="text-xs text-bordo/70">
+            {nivel === 'master'
+              ? 'Você vê e edita todos os 9 cargos da rede.'
+              : 'Você vê e edita: Atendente, Aux. cozinha, Monitor, Líder de equipe, Aux. administrativo.'}
+          </p>
+        </div>
+      </div>
+
+      {/* SINCRONIZAÇÃO AUTOMÁTICA COM GOOGLE SHEETS — só master pode trocar */}
+      {nivel === 'master' ? (
+        <SecaoSyncSheets state={state} dispatch={dispatch} />
+      ) : (
+        <section className="bg-white rounded-2xl border-2 border-bordo/10 p-5">
+          <h2 className="font-display text-2xl text-bordo">🔗 SHEETS SYNC</h2>
+          <p className="text-sm text-bordo/70 mt-1">
+            ✅ Conectado e sincronizando automaticamente. Configurações de URL ficam restritas ao acesso master.
+          </p>
+        </section>
+      )}
 
       {/* INATIVOS */}
       <section className="bg-white rounded-2xl border-2 border-bordo/10 p-5">
@@ -1605,39 +1693,41 @@ function Configuracoes({ state, dispatch, onLogout }) {
           ))}
       </section>
 
-      {/* BACKUP TÉCNICO (avançado, oculto por padrão) */}
-      <section className="bg-white rounded-2xl border-2 border-bordo/10 p-5">
-        <details>
-          <summary className="cursor-pointer text-bordo/70 hover:text-bordo font-semibold">
-            ▸ Backup técnico (JSON) · uso avançado
-          </summary>
-          <div className="mt-3 space-y-2">
-            <p className="text-xs text-bordo/60">
-              Como tu já tem Sheets Sync ativo, backup manual não é necessário. Estes botões servem apenas para migração entre dispositivos ou recuperação de emergência.
-            </p>
-            <button onClick={baixarJson}
-              className="w-full bg-cinzaCDB hover:bg-bordo/10 text-bordo font-display py-2.5 px-4 rounded-xl tracking-wider text-sm">
-              💾 BAIXAR JSON COMPLETO
-            </button>
-            <button onClick={() => fileRef.current?.click()}
-              className="w-full border-2 border-bordo/30 text-bordo font-display py-2.5 px-4 rounded-xl tracking-wider text-sm">
-              📥 RESTAURAR DE JSON
-            </button>
-            <input ref={fileRef} type="file" accept="application/json" onChange={importar} className="hidden" />
-          </div>
-        </details>
-      </section>
+      {/* BACKUP TÉCNICO — só master */}
+      {nivel === 'master' && (
+        <section className="bg-white rounded-2xl border-2 border-bordo/10 p-5">
+          <details>
+            <summary className="cursor-pointer text-bordo/70 hover:text-bordo font-semibold">
+              ▸ Backup técnico (JSON) · uso avançado
+            </summary>
+            <div className="mt-3 space-y-2">
+              <p className="text-xs text-bordo/60">
+                Como tu já tem Sheets Sync ativo, backup manual não é necessário. Estes botões servem apenas para migração entre dispositivos ou recuperação de emergência.
+              </p>
+              <button onClick={baixarJson}
+                className="w-full bg-cinzaCDB hover:bg-bordo/10 text-bordo font-display py-2.5 px-4 rounded-xl tracking-wider text-sm">
+                💾 BAIXAR JSON COMPLETO
+              </button>
+              <button onClick={() => fileRef.current?.click()}
+                className="w-full border-2 border-bordo/30 text-bordo font-display py-2.5 px-4 rounded-xl tracking-wider text-sm">
+                📥 RESTAURAR DE JSON
+              </button>
+              <input ref={fileRef} type="file" accept="application/json" onChange={importar} className="hidden" />
+            </div>
+          </details>
+        </section>
+      )}
 
       {/* SAIR DO APP */}
       <section className="bg-white rounded-2xl border-2 border-bordo/10 p-5">
         <h2 className="font-display text-2xl text-bordo mb-2">SESSÃO</h2>
-        <p className="text-sm text-bordo/60 mb-3">Encerra a sessão e pede a senha do time na próxima abertura.</p>
+        <p className="text-sm text-bordo/60 mb-3">Encerra a sessão e pede a senha na próxima abertura.</p>
         <button onClick={() => { if (confirm('Sair do app?')) onLogout(); }}
           className="px-4 py-2.5 bg-bordo text-amarelo font-display tracking-wider rounded-xl">🚪 SAIR DO APP</button>
       </section>
 
       <p className="text-center text-xs text-bordo/50">
-        Cachorro do Bigode · Desempenho v1.4 · Mitawa Licenciadora · 🌭
+        Cachorro do Bigode · Desempenho v1.5 · Mitawa Licenciadora · 🌭
       </p>
     </div>
   );
@@ -1858,10 +1948,10 @@ function TelaLogin({ onSuccess }) {
     setCarregando(true);
     setErro('');
     try {
-      const hash = await sha256Hex(senha.trim());
-      if (hash === SENHA_HASH) {
-        setAuthValid();
-        onSuccess();
+      const nivel = await identificarNivel(senha);
+      if (nivel) {
+        setAuthValid(nivel);
+        onSuccess(nivel);
       } else {
         setErro('Senha incorreta. Pede pra Débora.');
       }
@@ -1919,14 +2009,14 @@ function TelaLogin({ onSuccess }) {
 }
 
 function App() {
-  const [autenticado, setAutenticado] = useState(isAuthValid);
-  if (!autenticado) {
-    return <TelaLogin onSuccess={() => setAutenticado(true)} />;
+  const [nivel, setNivel] = useState(getNivelAtual);
+  if (!nivel) {
+    return <TelaLogin onSuccess={(n) => setNivel(n)} />;
   }
-  return <AppPrincipal onLogout={() => { clearAuth(); setAutenticado(false); }} />;
+  return <AppPrincipal nivel={nivel} onLogout={() => { clearAuth(); setNivel(null); }} />;
 }
 
-function AppPrincipal({ onLogout }) {
+function AppPrincipal({ nivel, onLogout }) {
   const [state, setState] = useState(loadState);
   const [tab, setTab] = useState('dashboard');
   const [selectedId, setSelectedId] = useState(null);
@@ -1986,12 +2076,12 @@ function AppPrincipal({ onLogout }) {
   return (
     <div className="min-h-screen paper-bg">
       <Header tab={tab} setTab={(t) => { setTab(t); if (t !== 'colab') setSelectedId(null); }}
-        syncStatus={syncStatus} sheetsActive={!!getSheetsUrl()} onLogout={onLogout} />
+        syncStatus={syncStatus} sheetsActive={!!getSheetsUrl()} onLogout={onLogout} nivel={nivel} />
       <main>
-        {tab === 'dashboard' && <Dashboard state={state} setTab={setTab} setSelectedId={setSelectedId} />}
-        {tab === 'colab'     && <ListaColaboradores state={state} dispatch={dispatch} selectedId={selectedId} setSelectedId={setSelectedId} setTab={setTab} />}
-        {tab === 'avaliar'   && <NovaAvaliacao state={state} dispatch={dispatch} setTab={setTab} setSelectedId={setSelectedId} />}
-        {tab === 'config'    && <Configuracoes state={state} dispatch={dispatch} onLogout={onLogout} />}
+        {tab === 'dashboard' && <Dashboard state={state} setTab={setTab} setSelectedId={setSelectedId} nivel={nivel} />}
+        {tab === 'colab'     && <ListaColaboradores state={state} dispatch={dispatch} selectedId={selectedId} setSelectedId={setSelectedId} setTab={setTab} nivel={nivel} />}
+        {tab === 'avaliar'   && <NovaAvaliacao state={state} dispatch={dispatch} setTab={setTab} setSelectedId={setSelectedId} nivel={nivel} />}
+        {tab === 'config'    && <Configuracoes state={state} dispatch={dispatch} onLogout={onLogout} nivel={nivel} />}
       </main>
 
       {toast && (
@@ -2007,6 +2097,5 @@ function AppPrincipal({ onLogout }) {
 
 ReactDOM.createRoot(document.getElementById('root')).render(<App />);
 </script>
-
 </body>
 </html>
