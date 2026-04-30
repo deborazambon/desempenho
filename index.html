@@ -1,0 +1,1964 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
+<meta name="theme-color" content="#680505" />
+<meta name="apple-mobile-web-app-capable" content="yes" />
+<meta name="apple-mobile-web-app-title" content="Desempenho CDB" />
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+<title>Cachorro do Bigode — Desempenho</title>
+
+<link rel="preconnect" href="https://fonts.googleapis.com" />
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+<link href="https://fonts.googleapis.com/css2?family=Anton&family=Mulish:wght@400;600;700;800&display=swap" rel="stylesheet" />
+
+<script src="https://cdn.tailwindcss.com"></script>
+<script>
+  tailwind.config = {
+    theme: {
+      extend: {
+        colors: {
+          bordo:     '#680505',
+          vermelho:  '#CC0000',
+          vermAp:    '#CF3034',
+          amarelo:   '#FECF23',
+          azulCDB:   '#73C6EF',
+          cinzaCDB:  '#F4F4F4',
+        },
+        fontFamily: {
+          display: ['Anton', 'Impact', 'sans-serif'],
+          body:    ['Mulish', 'system-ui', 'sans-serif'],
+        }
+      }
+    }
+  }
+</script>
+
+<style>
+  html, body { background: #F4F4F4; font-family: 'Mulish', system-ui, sans-serif; }
+  .font-display { letter-spacing: 0.02em; }
+  /* textura sutil tipo papel — apoio do MIV */
+  .paper-bg {
+    background-image:
+      radial-gradient(rgba(104,5,5,.04) 1px, transparent 1px),
+      radial-gradient(rgba(104,5,5,.03) 1px, transparent 1px);
+    background-size: 18px 18px, 32px 32px;
+    background-position: 0 0, 9px 9px;
+  }
+  /* repeat diagonal text — apoio do MIV */
+  .diag-text {
+    background-image:
+      repeating-linear-gradient(-30deg,
+        rgba(104,5,5,0.045) 0 16px,
+        transparent 16px 80px);
+  }
+  .scrollbar-thin::-webkit-scrollbar { width: 6px; height: 6px; }
+  .scrollbar-thin::-webkit-scrollbar-thumb { background: #CC0000; border-radius: 999px; }
+  .scrollbar-thin::-webkit-scrollbar-track { background: #FFE9E9; }
+  details > summary { list-style: none; cursor: pointer; }
+  details > summary::-webkit-details-marker { display: none; }
+  input[type="range"] { accent-color: #CC0000; }
+  @keyframes pop { 0%{transform:scale(.96);opacity:0} 100%{transform:scale(1);opacity:1} }
+  .pop-in { animation: pop .25s ease-out; }
+  @media print {
+    .no-print { display: none !important; }
+    body { background: white; }
+  }
+</style>
+
+<script crossorigin src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
+<script crossorigin src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
+<script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+</head>
+<body>
+<div id="root"></div>
+
+<script type="text/babel" data-presets="react">
+const { useState, useEffect, useMemo, useRef } = React;
+
+/* =========================================================================
+   1. CONFIG: CRITÉRIOS DE AVALIAÇÃO
+   ========================================================================= */
+
+const CRITERIOS_UNIVERSAIS = [
+  { id: 'u1',  label: 'Pontualidade e assiduidade' },
+  { id: 'u2',  label: 'Apresentação pessoal e uniforme' },
+  { id: 'u3',  label: 'Comprometimento com a marca Cachorro do Bigode' },
+  { id: 'u4',  label: 'Trabalho em equipe e colaboração' },
+  { id: 'u5',  label: 'Comunicação interpessoal' },
+  { id: 'u6',  label: 'Postura ética e profissional' },
+  { id: 'u7',  label: 'Cumprimento de normas e procedimentos' },
+  { id: 'u8',  label: 'Atitude proativa e iniciativa' },
+  { id: 'u9',  label: 'Resiliência sob pressão' },
+  { id: 'u10', label: 'Higiene pessoal e do ambiente' },
+];
+
+const CARGOS = {
+  'Atendente': {
+    proximo: 'Monitor',
+    trilha: 'operacional',
+    criterios: [
+      { id: 'a1', label: 'Cordialidade e simpatia no atendimento' },
+      { id: 'a2', label: 'Conhecimento do cardápio e produtos' },
+      { id: 'a3', label: 'Velocidade no atendimento' },
+      { id: 'a4', label: 'Sugestão de produtos (upsell e cross-sell)' },
+      { id: 'a5', label: 'Resolução de reclamações no balcão' },
+      { id: 'a6', label: 'Operação correta do PDV' },
+      { id: 'a7', label: 'Domínio das promoções vigentes' },
+    ]
+  },
+  'Auxiliar de cozinha': {
+    proximo: 'Monitor',
+    trilha: 'operacional',
+    criterios: [
+      { id: 'c1', label: 'Padronização das receitas (ficha técnica)' },
+      { id: 'c2', label: 'Higiene e segurança alimentar (boas práticas)' },
+      { id: 'c3', label: 'Controle de tempo de preparo' },
+      { id: 'c4', label: 'Organização da estação de trabalho (mise en place)' },
+      { id: 'c5', label: 'Controle de desperdício de insumos' },
+      { id: 'c6', label: 'Manutenção e limpeza de equipamentos' },
+      { id: 'c7', label: 'Conhecimento técnico dos insumos' },
+    ]
+  },
+  'Monitor': {
+    proximo: 'Líder de equipe',
+    trilha: 'operacional',
+    criterios: [
+      { id: 'm1', label: 'Apoio operacional ao turno' },
+      { id: 'm2', label: 'Conferência de procedimentos da equipe' },
+      { id: 'm3', label: 'Suporte e orientação a novatos' },
+      { id: 'm4', label: 'Domínio dos processos da loja' },
+      { id: 'm5', label: 'Comunicação com a liderança' },
+      { id: 'm6', label: 'Identificação de gargalos operacionais' },
+    ]
+  },
+  'Líder de equipe': {
+    proximo: 'Supervisor',
+    trilha: 'operacional',
+    criterios: [
+      { id: 'l1', label: 'Liderança e influência positiva no turno' },
+      { id: 'l2', label: 'Gestão de conflitos' },
+      { id: 'l3', label: 'Distribuição e delegação de tarefas' },
+      { id: 'l4', label: 'Treinamento e onboarding de novos' },
+      { id: 'l5', label: 'Cumprimento de metas do turno' },
+      { id: 'l6', label: 'Feedback construtivo à equipe' },
+      { id: 'l7', label: 'Tomada de decisão sob pressão' },
+    ]
+  },
+  'Supervisor': {
+    proximo: 'Gerente',
+    trilha: 'operacional',
+    criterios: [
+      { id: 's1', label: 'Gestão integral da equipe da unidade' },
+      { id: 's2', label: 'Acompanhamento de indicadores (NPS, ticket médio, vendas)' },
+      { id: 's3', label: 'Controle de estoque e pedidos' },
+      { id: 's4', label: 'Elaboração de escalas e folgas' },
+      { id: 's5', label: 'Resolução de problemas críticos' },
+      { id: 's6', label: 'Treinamento contínuo da equipe' },
+      { id: 's7', label: 'Padrão de qualidade do produto entregue' },
+      { id: 's8', label: 'Atendimento a auditorias da rede' },
+    ]
+  },
+  'Gerente': {
+    proximo: null,
+    trilha: 'operacional',
+    criterios: [
+      { id: 'g1', label: 'Resultado financeiro da unidade (DRE)' },
+      { id: 'g2', label: 'Gestão de pessoas (turnover, absenteísmo, clima)' },
+      { id: 'g3', label: 'Aderência aos padrões da franqueadora' },
+      { id: 'g4', label: 'Relacionamento institucional com franqueador' },
+      { id: 'g5', label: 'Plano de ação e melhoria contínua' },
+      { id: 'g6', label: 'Representação da marca na comunidade local' },
+      { id: 'g7', label: 'Gestão de fornecedores locais' },
+      { id: 'g8', label: 'Liderança estratégica' },
+    ]
+  },
+  'Auxiliar administrativo': {
+    proximo: 'Supervisor administrativo',
+    trilha: 'administrativa',
+    criterios: [
+      { id: 'aa1', label: 'Organização documental' },
+      { id: 'aa2', label: 'Atenção a detalhes em lançamentos' },
+      { id: 'aa3', label: 'Cumprimento de prazos' },
+      { id: 'aa4', label: 'Domínio de planilhas e sistemas (ERP)' },
+      { id: 'aa5', label: 'Comunicação interna escrita' },
+      { id: 'aa6', label: 'Suporte aos demais setores' },
+      { id: 'aa7', label: 'Sigilo e tratamento de dados' },
+    ]
+  },
+  'Supervisor administrativo': {
+    proximo: 'Gerente administrativo',
+    trilha: 'administrativa',
+    criterios: [
+      { id: 'sa1', label: 'Gestão de processos administrativos' },
+      { id: 'sa2', label: 'Análise de dados e relatórios' },
+      { id: 'sa3', label: 'Suporte estruturado às unidades' },
+      { id: 'sa4', label: 'Conformidade legal/fiscal' },
+      { id: 'sa5', label: 'Liderança da equipe administrativa' },
+      { id: 'sa6', label: 'Acompanhamento de indicadores administrativos' },
+      { id: 'sa7', label: 'Negociação com fornecedores' },
+    ]
+  },
+  'Gerente administrativo': {
+    proximo: null,
+    trilha: 'administrativa',
+    criterios: [
+      { id: 'ga1', label: 'Visão estratégica administrativa' },
+      { id: 'ga2', label: 'Gestão financeira (fluxo de caixa, DRE consolidado)' },
+      { id: 'ga3', label: 'Compliance e auditoria' },
+      { id: 'ga4', label: 'Desenvolvimento de equipe' },
+      { id: 'ga5', label: 'Reportes e governança para diretoria' },
+      { id: 'ga6', label: 'Relacionamento com terceiros (contábil, jurídico, bancos)' },
+      { id: 'ga7', label: 'Implementação de melhorias e automação' },
+      { id: 'ga8', label: 'Gestão orçamentária' },
+    ]
+  },
+};
+
+const CARGO_LISTA = Object.keys(CARGOS);
+
+const CARGOS_LIDERANCA = ['Líder de equipe', 'Supervisor', 'Gerente', 'Supervisor administrativo', 'Gerente administrativo'];
+
+function ehLideranca(cargo) { return CARGOS_LIDERANCA.includes(cargo); }
+
+const ESCALA_LABELS = {
+  1: 'Insatisfatório',
+  2: 'Abaixo do esperado',
+  3: 'Atende',
+  4: 'Supera',
+  5: 'Excelência',
+};
+
+/* =========================================================================
+   2. LÓGICA DE CÁLCULO E RECOMENDAÇÃO
+   ========================================================================= */
+
+function calcularMedia(avaliacao) {
+  const v = Object.values(avaliacao.criterios || {}).filter(n => typeof n === 'number');
+  if (!v.length) return 0;
+  return v.reduce((a,b) => a+b, 0) / v.length;
+}
+
+function gerarRecomendacao(media, cargoAtual) {
+  const proximo = CARGOS[cargoAtual]?.proximo;
+  if (media < 2.5)  return {
+    nivel: 'PRD', titulo: 'Plano de Recuperação de Desempenho',
+    cor: 'bg-red-700 text-white',
+    acao: 'Acompanhamento intensivo por 60 dias. Avaliar fit do colaborador no cargo. Reunião urgente com o gestor direto.',
+  };
+  if (media < 3.5) return {
+    nivel: 'DEV', titulo: 'Em desenvolvimento',
+    cor: 'bg-amber-500 text-bordo',
+    acao: 'Plano de treinamento direcionado nos pontos fracos. Reavaliação em 90 dias.',
+  };
+  if (media < 4.3) return {
+    nivel: 'OK', titulo: 'Cumpre o esperado',
+    cor: 'bg-green-600 text-white',
+    acao: 'Mantém funções atuais. Continuar capacitação contínua. Reavaliação em 6 meses.',
+  };
+  if (media < 4.8) return {
+    nivel: 'EXP', titulo: 'Pronto para novas responsabilidades',
+    cor: 'bg-azulCDB text-bordo',
+    acao: `Candidato a expansão de escopo. ${proximo ? 'Iniciar shadow do cargo de ' + proximo + '.' : 'Liderar projetos estratégicos da rede.'}`,
+  };
+  return {
+    nivel: 'PROMO', titulo: 'Pronto para promoção',
+    cor: 'bg-amarelo text-bordo',
+    acao: proximo
+      ? `Promover para ${proximo} na próxima janela. Iniciar plano de transição de 30 dias.`
+      : 'Topo da trilha. Considerar bonificação, projetos estratégicos ou expansão regional.',
+  };
+}
+
+function classificarPontos(avaliacao, cargo) {
+  const todos = [...CRITERIOS_UNIVERSAIS, ...(CARGOS[cargo]?.criterios || [])];
+  const itens = todos.map(c => ({
+    id: c.id, label: c.label,
+    nota: avaliacao.criterios?.[c.id] ?? null,
+  })).filter(x => x.nota !== null);
+  const fortes = [...itens].filter(i => i.nota >= 4).sort((a,b) => b.nota - a.nota).slice(0, 5);
+  const fracos = [...itens].filter(i => i.nota <= 3).sort((a,b) => a.nota - b.nota).slice(0, 5);
+  return { fortes, fracos };
+}
+
+/* =========================================================================
+   3. STORAGE E ESTADO GLOBAL
+   ========================================================================= */
+
+const STORAGE_KEY = 'cdb_desempenho_v1';
+
+function loadState() {
+  try {
+    const raw = localStorage.getItem(STORAGE_KEY);
+    if (!raw) return { colaboradores: [] };
+    const parsed = JSON.parse(raw);
+    return parsed && parsed.colaboradores ? parsed : { colaboradores: [] };
+  } catch {
+    return { colaboradores: [] };
+  }
+}
+
+function saveState(state) {
+  try { localStorage.setItem(STORAGE_KEY, JSON.stringify(state)); } catch {}
+}
+
+/* =========================================================================
+   SHEETS SYNC — integração com Google Apps Script Web App
+   ========================================================================= */
+
+const SHEETS_URL_KEY  = 'cdb_sheets_url';
+const LAST_SYNC_KEY   = 'cdb_last_sync';
+const SYNC_PENDING_KEY = 'cdb_sync_pending';
+
+function getSheetsUrl() {
+  return localStorage.getItem(SHEETS_URL_KEY) || '';
+}
+function setSheetsUrl(url) {
+  if (url) localStorage.setItem(SHEETS_URL_KEY, url);
+  else     localStorage.removeItem(SHEETS_URL_KEY);
+}
+
+async function pullFromSheets() {
+  const url = getSheetsUrl();
+  if (!url) throw new Error('URL do Sheets não configurada');
+  const res = await fetch(url + '?action=read', { method: 'GET' });
+  if (!res.ok) throw new Error('Falha ao ler planilha (HTTP ' + res.status + ')');
+  const data = await res.json();
+  if (data.error) throw new Error(data.error);
+  return data;
+}
+
+async function pushToSheets(state) {
+  const url = getSheetsUrl();
+  if (!url) throw new Error('URL do Sheets não configurada');
+  // Apps Script Web App não aceita custom headers via fetch sem CORS preflight.
+  // Solução: enviar como text/plain com payload JSON no body — Apps Script entende.
+  const res = await fetch(url, {
+    method: 'POST',
+    body: JSON.stringify({ action: 'write', state }),
+    headers: { 'Content-Type': 'text/plain;charset=utf-8' },
+  });
+  if (!res.ok) throw new Error('Falha ao escrever (HTTP ' + res.status + ')');
+  const data = await res.json();
+  if (data.error) throw new Error(data.error);
+  localStorage.setItem(LAST_SYNC_KEY, new Date().toISOString());
+  localStorage.removeItem(SYNC_PENDING_KEY);
+  return data;
+}
+
+function markSyncPending() {
+  localStorage.setItem(SYNC_PENDING_KEY, new Date().toISOString());
+}
+function isSyncPending() {
+  return !!localStorage.getItem(SYNC_PENDING_KEY);
+}
+function getLastSync() {
+  return localStorage.getItem(LAST_SYNC_KEY);
+}
+
+function uid() {
+  return Date.now().toString(36) + Math.random().toString(36).slice(2, 8);
+}
+
+function fmtDate(iso) {
+  if (!iso) return '—';
+  const d = new Date(iso);
+  if (isNaN(d)) return '—';
+  return d.toLocaleDateString('pt-BR', { day: '2-digit', month: '2-digit', year: 'numeric' });
+}
+
+function tempoCasa(dataInicio) {
+  if (!dataInicio) return '—';
+  const d = new Date(dataInicio);
+  if (isNaN(d)) return '—';
+  const hoje = new Date();
+  let anos = hoje.getFullYear() - d.getFullYear();
+  let meses = hoje.getMonth() - d.getMonth();
+  if (hoje.getDate() < d.getDate()) meses--;
+  if (meses < 0) { anos--; meses += 12; }
+  if (anos === 0 && meses === 0) return 'menos de 1 mês';
+  if (anos === 0) return `${meses} ${meses === 1 ? 'mês' : 'meses'}`;
+  if (meses === 0) return `${anos} ${anos === 1 ? 'ano' : 'anos'}`;
+  return `${anos}a ${meses}m`;
+}
+
+/* =========================================================================
+   4. COMPONENTES DE UI BÁSICOS
+   ========================================================================= */
+
+function Logo({ size = 'lg' }) {
+  const big = size === 'lg';
+  return (
+    <div className="inline-flex items-center gap-3">
+      <div className={`${big ? 'w-12 h-12' : 'w-9 h-9'} rounded-full bg-amarelo border-4 border-bordo flex items-center justify-center font-display text-bordo ${big ? 'text-2xl' : 'text-lg'}`}>
+        CDB
+      </div>
+      <div className="leading-none">
+        <div className={`font-display ${big ? 'text-3xl' : 'text-xl'} text-amarelo tracking-wide`}>DESEMPENHO</div>
+        <div className={`font-display ${big ? 'text-base' : 'text-xs'} text-white/80 -mt-1`}>CACHORRO DO BIGODE</div>
+      </div>
+    </div>
+  );
+}
+
+function Badge({ children, className='' }) {
+  return <span className={`inline-block px-2 py-0.5 rounded text-xs font-bold ${className}`}>{children}</span>;
+}
+
+function Stat({ label, value, accent='bg-vermelho' }) {
+  return (
+    <div className="bg-white rounded-2xl border-2 border-bordo/10 p-4 shadow-sm">
+      <div className={`w-10 h-1 ${accent} mb-3 rounded-full`}></div>
+      <div className="font-display text-4xl text-bordo">{value}</div>
+      <div className="text-xs uppercase tracking-wider text-bordo/70 font-bold mt-1">{label}</div>
+    </div>
+  );
+}
+
+function Bar({ value, max=5 }) {
+  const pct = (value / max) * 100;
+  let color = '#CC0000';
+  if (value >= 4.3) color = '#16A34A';
+  else if (value >= 3.5) color = '#FECF23';
+  return (
+    <div className="w-full bg-cinzaCDB rounded-full h-2 overflow-hidden">
+      <div style={{ width: `${pct}%`, background: color }} className="h-full transition-all"></div>
+    </div>
+  );
+}
+
+/* =========================================================================
+   5. COMPONENTE: HEADER + NAV
+   ========================================================================= */
+
+function Header({ tab, setTab, syncStatus, sheetsActive }) {
+  const tabs = [
+    { id: 'dashboard',   label: 'Dashboard' },
+    { id: 'colab',       label: 'Colaboradores' },
+    { id: 'avaliar',     label: 'Nova Avaliação' },
+    { id: 'config',      label: 'Configurações' },
+  ];
+  const syncIcon = !sheetsActive ? null
+    : syncStatus === 'syncing' ? '⏳'
+    : syncStatus === 'ok' ? '✅'
+    : syncStatus === 'offline' ? '⚠️'
+    : '🔗';
+  const syncText = !sheetsActive ? null
+    : syncStatus === 'syncing' ? 'sincronizando'
+    : syncStatus === 'ok' ? 'sincronizado'
+    : syncStatus === 'offline' ? 'offline'
+    : 'conectado';
+  return (
+    <header className="bg-bordo diag-text border-b-4 border-amarelo sticky top-0 z-40">
+      <div className="max-w-6xl mx-auto px-4 py-3 flex items-center justify-between gap-2">
+        <Logo />
+        <div className="flex items-center gap-3">
+          {sheetsActive && (
+            <button onClick={() => setTab('config')}
+              title={`Status: ${syncText}`}
+              className="hidden sm:flex items-center gap-1 px-2 py-1 rounded-lg bg-white/10 hover:bg-white/20 text-amarelo text-xs font-bold">
+              <span>{syncIcon}</span><span className="opacity-80">{syncText}</span>
+            </button>
+          )}
+          <nav className="hidden md:flex gap-1">
+            {tabs.map(t => (
+              <button key={t.id} onClick={() => setTab(t.id)}
+                className={`px-4 py-2 rounded-lg font-display text-lg tracking-wider transition
+                  ${tab === t.id ? 'bg-amarelo text-bordo' : 'text-amarelo hover:bg-white/10'}`}>
+                {t.label.toUpperCase()}
+              </button>
+            ))}
+          </nav>
+        </div>
+      </div>
+      {sheetsActive && (
+        <div className="sm:hidden bg-bordo/50 text-amarelo text-xs text-center py-1 border-t border-amarelo/20">
+          {syncIcon} {syncText}
+        </div>
+      )}
+      <nav className="md:hidden flex overflow-x-auto scrollbar-thin border-t border-amarelo/20">
+        {tabs.map(t => (
+          <button key={t.id} onClick={() => setTab(t.id)}
+            className={`flex-shrink-0 px-4 py-2 font-display text-sm tracking-wider transition
+              ${tab === t.id ? 'bg-amarelo text-bordo' : 'text-amarelo'}`}>
+            {t.label.toUpperCase()}
+          </button>
+        ))}
+      </nav>
+    </header>
+  );
+}
+
+/* =========================================================================
+   6. PÁGINA: DASHBOARD
+   ========================================================================= */
+
+function Dashboard({ state, setTab, setSelectedId }) {
+  const colabs = state.colaboradores.filter(c => c.ativo !== false);
+  const total = colabs.length;
+
+  const todasAvaliacoes = colabs.flatMap(c => (c.avaliacoes || []).map(a => ({ ...a, colab: c })));
+  const ultimoMes = new Date(); ultimoMes.setDate(ultimoMes.getDate() - 30);
+  const avaliacoesMes = todasAvaliacoes.filter(a => new Date(a.data) >= ultimoMes).length;
+
+  const ultimaPorColab = colabs.map(c => {
+    const av = (c.avaliacoes || []).slice().sort((a,b) => new Date(b.data) - new Date(a.data))[0];
+    return { c, ultima: av };
+  });
+
+  const promo  = ultimaPorColab.filter(x => x.ultima && calcularMedia(x.ultima) >= 4.8).length;
+  const prd    = ultimaPorColab.filter(x => x.ultima && calcularMedia(x.ultima) < 2.5).length;
+  const semAv  = ultimaPorColab.filter(x => !x.ultima).length;
+
+  const noventaDias = new Date(); noventaDias.setDate(noventaDias.getDate() - 90);
+  const atrasados = ultimaPorColab.filter(x => x.ultima && new Date(x.ultima.data) < noventaDias).length;
+
+  const autoPendentes = colabs.filter(c => c.autoAvaliacaoPendente);
+
+  const top = [...ultimaPorColab]
+    .filter(x => x.ultima)
+    .map(x => ({ ...x, media: calcularMedia(x.ultima) }))
+    .sort((a,b) => b.media - a.media)
+    .slice(0,5);
+
+  const atencao = [...ultimaPorColab]
+    .filter(x => x.ultima)
+    .map(x => ({ ...x, media: calcularMedia(x.ultima) }))
+    .filter(x => x.media < 3.5)
+    .sort((a,b) => a.media - b.media)
+    .slice(0,5);
+
+  return (
+    <div className="max-w-6xl mx-auto px-4 py-6 space-y-6">
+      <div className="flex items-end justify-between flex-wrap gap-3">
+        <div>
+          <h1 className="font-display text-5xl text-bordo">PAINEL DE DESEMPENHO</h1>
+          <p className="text-bordo/70 font-semibold">Visão geral da operação — Cachorro do Bigode</p>
+        </div>
+        <button onClick={() => setTab('avaliar')}
+          className="bg-vermelho hover:bg-bordo text-amarelo font-display text-xl px-5 py-3 rounded-xl tracking-wider shadow-md">
+          + NOVA AVALIAÇÃO
+        </button>
+      </div>
+
+      <div className="grid grid-cols-2 md:grid-cols-5 gap-3">
+        <Stat label="Colaboradores"      value={total}         accent="bg-bordo" />
+        <Stat label="Avaliações 30d"     value={avaliacoesMes} accent="bg-vermelho" />
+        <Stat label="Prontos p/ promoção" value={promo}        accent="bg-amarelo" />
+        <Stat label="Em PRD"             value={prd}           accent="bg-red-700" />
+        <Stat label="Sem avaliação 90d"  value={atrasados + semAv} accent="bg-azulCDB" />
+      </div>
+
+      {autoPendentes.length > 0 && (
+        <div className="bg-azulCDB/15 border-l-4 border-azulCDB rounded-r-xl p-4">
+          <div className="flex items-center justify-between flex-wrap gap-2">
+            <div>
+              <div className="font-display text-xl text-bordo">👤 {autoPendentes.length} AUTO-AVALIAÇÃO(ÕES) PENDENTE(S)</div>
+              <p className="text-sm text-bordo/80">
+                {autoPendentes.map(c => c.nome).join(', ')} já preencheram. Aguardando sua avaliação oficial pra fechar o ciclo.
+              </p>
+            </div>
+            <button onClick={() => setTab('avaliar')}
+              className="bg-azulCDB text-bordo font-display px-4 py-2 rounded-xl tracking-wider">
+              FECHAR CICLO
+            </button>
+          </div>
+        </div>
+      )}
+
+      {(() => {
+        const ultimoBackup = localStorage.getItem('cdb_ultimo_backup');
+        const dias = ultimoBackup ? Math.floor((new Date() - new Date(ultimoBackup)) / 86400000) : null;
+        const totalDados = colabs.length + colabs.reduce((s,c)=>s+(c.avaliacoes||[]).length, 0);
+        if (totalDados === 0) return null;
+        if (dias === null) {
+          return (
+            <div className="bg-amber-50 border-l-4 border-amber-400 rounded-r-xl p-4">
+              <div className="flex items-center justify-between flex-wrap gap-2">
+                <div>
+                  <div className="font-display text-xl text-amber-900">⚠️ FAÇA SEU PRIMEIRO BACKUP</div>
+                  <p className="text-sm text-amber-900/80">Você nunca fez backup. Se trocar de celular ou limpar o navegador, perde tudo.</p>
+                </div>
+                <button onClick={() => setTab('config')}
+                  className="bg-amber-500 text-white font-display px-4 py-2 rounded-xl tracking-wider">
+                  FAZER BACKUP
+                </button>
+              </div>
+            </div>
+          );
+        }
+        if (dias > 7) {
+          return (
+            <div className="bg-red-50 border-l-4 border-red-500 rounded-r-xl p-4">
+              <div className="flex items-center justify-between flex-wrap gap-2">
+                <div>
+                  <div className="font-display text-xl text-red-800">🚨 BACKUP HÁ {dias} DIAS</div>
+                  <p className="text-sm text-red-800/80">Faça backup agora pra não perder os dados acumulados.</p>
+                </div>
+                <button onClick={() => setTab('config')}
+                  className="bg-red-700 text-white font-display px-4 py-2 rounded-xl tracking-wider">
+                  BACKUP AGORA
+                </button>
+              </div>
+            </div>
+          );
+        }
+        return null;
+      })()}
+
+      <div className="grid md:grid-cols-2 gap-6">
+        <section className="bg-white rounded-2xl border-2 border-bordo/10 p-5">
+          <h2 className="font-display text-2xl text-bordo mb-3">🏆 TOP PERFORMERS</h2>
+          {top.length === 0 ? (
+            <p className="text-bordo/60">Sem avaliações ainda. Bora começar?</p>
+          ) : top.map(x => (
+            <button key={x.c.id} onClick={() => { setSelectedId(x.c.id); setTab('colab'); }}
+              className="w-full flex items-center justify-between py-2 border-b border-bordo/10 hover:bg-cinzaCDB rounded transition">
+              <div className="text-left">
+                <div className="font-bold text-bordo">{x.c.nome}</div>
+                <div className="text-xs text-bordo/60">{x.c.cargo}</div>
+              </div>
+              <div className="font-display text-2xl text-vermelho">{x.media.toFixed(1)}</div>
+            </button>
+          ))}
+        </section>
+
+        <section className="bg-white rounded-2xl border-2 border-bordo/10 p-5">
+          <h2 className="font-display text-2xl text-bordo mb-3">⚠️ MERECEM ATENÇÃO</h2>
+          {atencao.length === 0 ? (
+            <p className="text-bordo/60">Ninguém em atenção. 🌭</p>
+          ) : atencao.map(x => (
+            <button key={x.c.id} onClick={() => { setSelectedId(x.c.id); setTab('colab'); }}
+              className="w-full flex items-center justify-between py-2 border-b border-bordo/10 hover:bg-cinzaCDB rounded transition">
+              <div className="text-left">
+                <div className="font-bold text-bordo">{x.c.nome}</div>
+                <div className="text-xs text-bordo/60">{x.c.cargo}</div>
+              </div>
+              <div className="font-display text-2xl" style={{ color: x.media < 2.5 ? '#7F1D1D' : '#CC0000' }}>{x.media.toFixed(1)}</div>
+            </button>
+          ))}
+        </section>
+      </div>
+    </div>
+  );
+}
+
+/* =========================================================================
+   7. PÁGINA: LISTA / DETALHE DE COLABORADORES
+   ========================================================================= */
+
+function ListaColaboradores({ state, dispatch, selectedId, setSelectedId, setTab }) {
+  const [busca, setBusca] = useState('');
+  const [filtroCargo, setFiltroCargo] = useState('todos');
+  const [showForm, setShowForm] = useState(false);
+
+  const lista = state.colaboradores
+    .filter(c => c.ativo !== false)
+    .filter(c => filtroCargo === 'todos' || c.cargo === filtroCargo)
+    .filter(c => c.nome.toLowerCase().includes(busca.toLowerCase()));
+
+  const sel = state.colaboradores.find(c => c.id === selectedId);
+
+  if (sel) {
+    return <DetalheColaborador
+      colab={sel} state={state} dispatch={dispatch}
+      voltar={() => setSelectedId(null)}
+      setTab={setTab}
+    />;
+  }
+
+  return (
+    <div className="max-w-6xl mx-auto px-4 py-6 space-y-4">
+      <div className="flex items-end justify-between flex-wrap gap-3">
+        <h1 className="font-display text-5xl text-bordo">COLABORADORES</h1>
+        <button onClick={() => setShowForm(true)}
+          className="bg-vermelho hover:bg-bordo text-amarelo font-display text-xl px-5 py-3 rounded-xl tracking-wider shadow-md">
+          + CADASTRAR
+        </button>
+      </div>
+
+      <div className="flex flex-wrap gap-2">
+        <input type="text" placeholder="Buscar por nome..."
+          value={busca} onChange={e => setBusca(e.target.value)}
+          className="flex-1 min-w-[200px] px-4 py-2 rounded-xl border-2 border-bordo/20 focus:border-vermelho focus:outline-none" />
+        <select value={filtroCargo} onChange={e => setFiltroCargo(e.target.value)}
+          className="px-4 py-2 rounded-xl border-2 border-bordo/20 focus:border-vermelho focus:outline-none bg-white font-semibold text-bordo">
+          <option value="todos">Todos os cargos</option>
+          {CARGO_LISTA.map(c => <option key={c} value={c}>{c}</option>)}
+        </select>
+      </div>
+
+      {lista.length === 0 ? (
+        <div className="bg-white rounded-2xl border-2 border-dashed border-bordo/20 p-10 text-center">
+          <p className="font-display text-2xl text-bordo">NENHUM COLABORADOR AINDA</p>
+          <p className="text-bordo/60 mt-2">Cadastra o primeiro pra começar.</p>
+        </div>
+      ) : (
+        <div className="grid sm:grid-cols-2 lg:grid-cols-3 gap-4">
+          {lista.map(c => {
+            const ultima = (c.avaliacoes || []).slice().sort((a,b) => new Date(b.data)-new Date(a.data))[0];
+            const media = ultima ? calcularMedia(ultima) : null;
+            return (
+              <button key={c.id} onClick={() => setSelectedId(c.id)}
+                className="bg-white rounded-2xl border-2 border-bordo/10 p-4 text-left hover:border-vermelho hover:shadow-lg transition">
+                <div className="flex items-start justify-between gap-2">
+                  <div className="flex-1 min-w-0">
+                    <div className="font-display text-xl text-bordo truncate">{c.nome}</div>
+                    <div className="text-sm text-bordo/70 font-semibold">{c.cargo}</div>
+                    {c.unidade && <div className="text-xs text-bordo/50">📍 {c.unidade}</div>}
+                  </div>
+                  {media !== null && (
+                    <div className="text-right">
+                      <div className="font-display text-3xl text-vermelho">{media.toFixed(1)}</div>
+                      <div className="text-[10px] text-bordo/60 uppercase">última nota</div>
+                    </div>
+                  )}
+                </div>
+                <div className="mt-3 flex items-center justify-between text-xs text-bordo/60">
+                  <span>🗓️ {tempoCasa(c.dataInicio)} de casa</span>
+                  <div className="flex items-center gap-2">
+                    {c.autoAvaliacaoPendente && <span className="bg-azulCDB/30 text-bordo px-2 py-0.5 rounded font-bold">👤 auto</span>}
+                    <span>{(c.avaliacoes || []).length} aval.</span>
+                  </div>
+                </div>
+              </button>
+            );
+          })}
+        </div>
+      )}
+
+      {showForm && <FormColaborador
+        onClose={() => setShowForm(false)}
+        onSave={(novo) => { dispatch({ type: 'ADD_COLAB', payload: novo }); setShowForm(false); }}
+      />}
+    </div>
+  );
+}
+
+function FormColaborador({ onClose, onSave, colab }) {
+  const [nome, setNome] = useState(colab?.nome || '');
+  const [cargo, setCargo] = useState(colab?.cargo || CARGO_LISTA[0]);
+  const [dataInicio, setDataInicio] = useState(colab?.dataInicio || '');
+  const [unidade, setUnidade] = useState(colab?.unidade || '');
+  const [cpf, setCpf] = useState(colab?.cpf || '');
+
+  const salvar = () => {
+    if (!nome.trim()) { alert('Informa o nome.'); return; }
+    if (!dataInicio) { alert('Informa a data de início.'); return; }
+    onSave({
+      id: colab?.id || uid(),
+      nome: nome.trim(), cargo, dataInicio, unidade: unidade.trim(), cpf: cpf.trim(),
+      ativo: colab?.ativo ?? true,
+      avaliacoes: colab?.avaliacoes || [],
+      criadoEm: colab?.criadoEm || new Date().toISOString(),
+    });
+  };
+
+  return (
+    <div className="fixed inset-0 bg-bordo/60 z-50 flex items-end md:items-center justify-center p-0 md:p-4">
+      <div className="bg-white rounded-t-3xl md:rounded-2xl max-w-lg w-full p-6 pop-in">
+        <h2 className="font-display text-3xl text-bordo">{colab ? 'EDITAR' : 'CADASTRAR'} COLABORADOR</h2>
+        <div className="space-y-3 mt-4">
+          <div>
+            <label className="text-xs uppercase font-bold text-bordo/70">Nome completo *</label>
+            <input value={nome} onChange={e => setNome(e.target.value)}
+              className="w-full px-3 py-2 rounded-lg border-2 border-bordo/20 focus:border-vermelho focus:outline-none" />
+          </div>
+          <div>
+            <label className="text-xs uppercase font-bold text-bordo/70">Cargo *</label>
+            <select value={cargo} onChange={e => setCargo(e.target.value)}
+              className="w-full px-3 py-2 rounded-lg border-2 border-bordo/20 focus:border-vermelho focus:outline-none bg-white">
+              {CARGO_LISTA.map(c => <option key={c} value={c}>{c}</option>)}
+            </select>
+          </div>
+          <div className="grid grid-cols-2 gap-3">
+            <div>
+              <label className="text-xs uppercase font-bold text-bordo/70">Data de início *</label>
+              <input type="date" value={dataInicio} onChange={e => setDataInicio(e.target.value)}
+                className="w-full px-3 py-2 rounded-lg border-2 border-bordo/20 focus:border-vermelho focus:outline-none" />
+            </div>
+            <div>
+              <label className="text-xs uppercase font-bold text-bordo/70">Unidade</label>
+              <input value={unidade} onChange={e => setUnidade(e.target.value)} placeholder="ex: Cidade Baixa"
+                className="w-full px-3 py-2 rounded-lg border-2 border-bordo/20 focus:border-vermelho focus:outline-none" />
+            </div>
+          </div>
+          <div>
+            <label className="text-xs uppercase font-bold text-bordo/70">CPF (opcional)</label>
+            <input value={cpf} onChange={e => setCpf(e.target.value)} placeholder="000.000.000-00"
+              className="w-full px-3 py-2 rounded-lg border-2 border-bordo/20 focus:border-vermelho focus:outline-none" />
+          </div>
+        </div>
+        <div className="flex gap-2 mt-6">
+          <button onClick={onClose} className="flex-1 py-3 rounded-xl border-2 border-bordo text-bordo font-display tracking-wider">CANCELAR</button>
+          <button onClick={salvar} className="flex-1 py-3 rounded-xl bg-vermelho text-amarelo font-display tracking-wider">SALVAR</button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+/* -------------------------------------------------------------------------
+   AUTO-AVALIAÇÃO (somente cargos de liderança)
+   O colaborador preenche em primeira pessoa antes da reunião com o gestor.
+   Fica como `autoAvaliacaoPendente` até ser consumida pela próxima avaliação.
+   ------------------------------------------------------------------------- */
+
+function AutoAvaliacaoModal({ colab, onClose, dispatch }) {
+  const [criterios, setCriterios] = useState(colab.autoAvaliacaoPendente?.criterios || {});
+  const [observacoes, setObservacoes] = useState(colab.autoAvaliacaoPendente?.observacoes || '');
+  const [data] = useState(new Date().toISOString().slice(0, 10));
+
+  const todos = [...CRITERIOS_UNIVERSAIS, ...(CARGOS[colab.cargo]?.criterios || [])];
+  const preenchidos = todos.filter(c => criterios[c.id] !== undefined).length;
+  const pct = todos.length ? Math.round((preenchidos / todos.length) * 100) : 0;
+  const mediaParcial = preenchidos > 0
+    ? Object.values(criterios).filter(n => typeof n === 'number').reduce((a,b) => a+b, 0) / preenchidos
+    : 0;
+
+  const setNota = (id, nota) => setCriterios(prev => ({ ...prev, [id]: nota }));
+
+  const salvar = () => {
+    if (preenchidos < todos.length) {
+      if (!confirm(`Faltam ${todos.length - preenchidos} critérios sem nota. Salvar mesmo assim?`)) return;
+    }
+    const auto = {
+      id: uid(),
+      data,
+      cargoNaEpoca: colab.cargo,
+      criterios: { ...criterios },
+      observacoes: observacoes.trim(),
+      criadaEm: new Date().toISOString(),
+    };
+    dispatch({ type: 'SAVE_AUTO', colabId: colab.id, payload: auto });
+    onClose();
+  };
+
+  const descartar = () => {
+    if (!confirm('Descartar esta auto-avaliação?')) return;
+    dispatch({ type: 'CLEAR_AUTO', colabId: colab.id });
+    onClose();
+  };
+
+  return (
+    <div className="fixed inset-0 bg-bordo/70 z-50 flex items-start justify-center p-0 md:p-4 overflow-y-auto">
+      <div className="bg-white rounded-2xl max-w-3xl w-full my-4 p-6 pop-in">
+        <div className="flex items-start justify-between mb-3">
+          <div>
+            <div className="inline-block bg-azulCDB text-bordo px-2 py-0.5 rounded text-xs font-bold uppercase tracking-wider">Auto-avaliação · Liderança</div>
+            <h2 className="font-display text-3xl text-bordo mt-1">{colab.nome.toUpperCase()}</h2>
+            <p className="text-bordo/70 text-sm">{colab.cargo} · Como <strong>você</strong> se vê neste ciclo (sem ver as notas do seu gestor)</p>
+          </div>
+          <button onClick={onClose} className="text-bordo text-2xl leading-none">×</button>
+        </div>
+
+        <div className="bg-azulCDB/20 border-l-4 border-azulCDB rounded-r-lg p-3 mb-4">
+          <p className="text-sm text-bordo">
+            <strong>Como funciona:</strong> dê uma nota de 1 (insatisfatório) a 5 (excelência) sendo <strong>honesto consigo mesmo</strong>.
+            Seu gestor fará a avaliação dele em separado e depois vocês comparam na reunião — o gap entre as duas notas é o que mais importa.
+          </p>
+        </div>
+
+        <div className="bg-cinzaCDB rounded-xl p-3 flex items-center gap-3 mb-4">
+          <div className="flex-1">
+            <div className="text-xs font-bold text-bordo/70 uppercase">Progresso</div>
+            <div className="w-full bg-white rounded-full h-3 mt-1">
+              <div className="bg-azulCDB h-3 rounded-full transition-all" style={{ width: `${pct}%` }}></div>
+            </div>
+          </div>
+          <div className="text-right">
+            <div className="font-display text-2xl text-bordo">{preenchidos}/{todos.length}</div>
+            {preenchidos > 0 && <div className="text-xs text-bordo/70">média: <strong>{mediaParcial.toFixed(2)}</strong></div>}
+          </div>
+        </div>
+
+        <h3 className="font-display text-xl text-bordo mb-2">EU ME CONSIDERO... (universais)</h3>
+        {CRITERIOS_UNIVERSAIS.map(c => (
+          <CriterioInput key={c.id} criterio={c} valor={criterios[c.id]} onChange={(n) => setNota(c.id, n)} />
+        ))}
+
+        <h3 className="font-display text-xl text-bordo mt-5 mb-2">NA MINHA FUNÇÃO ({colab.cargo.toUpperCase()})</h3>
+        {(CARGOS[colab.cargo]?.criterios || []).map(c => (
+          <CriterioInput key={c.id} criterio={c} valor={criterios[c.id]} onChange={(n) => setNota(c.id, n)} />
+        ))}
+
+        <div className="mt-4">
+          <label className="text-xs uppercase font-bold text-bordo/70">O que eu quero levar pra reunião com meu gestor?</label>
+          <textarea rows="3" value={observacoes} onChange={e => setObservacoes(e.target.value)}
+            placeholder="Conquistas que orgulho, dificuldades enfrentadas, apoio que precisa, expectativas..."
+            className="w-full px-3 py-2 rounded-lg border-2 border-bordo/20 focus:border-azulCDB" />
+        </div>
+
+        <div className="flex gap-2 mt-6">
+          {colab.autoAvaliacaoPendente && (
+            <button onClick={descartar} className="px-4 py-3 rounded-xl border-2 border-red-700 text-red-700 font-display tracking-wider">DESCARTAR</button>
+          )}
+          <button onClick={onClose} className="flex-1 py-3 rounded-xl border-2 border-bordo text-bordo font-display tracking-wider">FECHAR</button>
+          <button onClick={salvar} className="flex-1 py-3 rounded-xl bg-azulCDB text-bordo font-display tracking-wider">SALVAR</button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+/* =========================================================================
+   8. PÁGINA: DETALHE DE COLABORADOR
+   ========================================================================= */
+
+function DetalheColaborador({ colab, state, dispatch, voltar, setTab }) {
+  const [editando, setEditando] = useState(false);
+  const [verAval, setVerAval] = useState(null);
+  const [autoModal, setAutoModal] = useState(false);
+
+  const avaliacoes = (colab.avaliacoes || []).slice().sort((a,b) => new Date(b.data) - new Date(a.data));
+  const ultima = avaliacoes[0];
+  const mediaUltima = ultima ? calcularMedia(ultima) : null;
+  const rec = mediaUltima !== null ? gerarRecomendacao(mediaUltima, colab.cargo) : null;
+  const pontos = ultima ? classificarPontos(ultima, colab.cargo) : null;
+
+  const evolucao = avaliacoes.slice().reverse().map(a => ({ data: a.data, media: calcularMedia(a) }));
+
+  const desativar = () => {
+    if (confirm(`Inativar ${colab.nome}? (Pode reverter depois nas Configurações.)`)) {
+      dispatch({ type: 'TOGGLE_ATIVO', id: colab.id });
+      voltar();
+    }
+  };
+
+  return (
+    <div className="max-w-5xl mx-auto px-4 py-6 space-y-5">
+      <button onClick={voltar} className="text-bordo font-bold hover:underline">← voltar</button>
+
+      <div className="bg-bordo diag-text rounded-2xl p-6 text-white">
+        <div className="flex flex-wrap items-start justify-between gap-3">
+          <div>
+            <h1 className="font-display text-4xl md:text-5xl text-amarelo">{colab.nome.toUpperCase()}</h1>
+            <p className="font-semibold text-white/90">{colab.cargo} {colab.unidade && `· 📍 ${colab.unidade}`}</p>
+            <p className="text-white/70 text-sm">Início: {fmtDate(colab.dataInicio)} · {tempoCasa(colab.dataInicio)} de casa</p>
+          </div>
+          <div className="flex gap-2 no-print">
+            <button onClick={() => setEditando(true)} className="px-3 py-1.5 bg-white/10 hover:bg-white/20 rounded-lg text-amarelo text-sm font-bold">Editar</button>
+            <button onClick={desativar} className="px-3 py-1.5 bg-white/10 hover:bg-white/20 rounded-lg text-amarelo text-sm font-bold">Inativar</button>
+          </div>
+        </div>
+      </div>
+
+      {ehLideranca(colab.cargo) && (
+        <div className="bg-white rounded-2xl border-2 border-azulCDB/40 p-5">
+          <div className="flex items-center justify-between flex-wrap gap-3">
+            <div>
+              <div className="inline-block bg-azulCDB text-bordo px-2 py-0.5 rounded text-[10px] font-bold uppercase tracking-wider">Auto-avaliação · Liderança</div>
+              <h3 className="font-display text-xl text-bordo mt-1">
+                {colab.autoAvaliacaoPendente
+                  ? `Pendente desde ${fmtDate(colab.autoAvaliacaoPendente.data)}`
+                  : 'Sem auto-avaliação ativa'}
+              </h3>
+              <p className="text-sm text-bordo/70">
+                {colab.autoAvaliacaoPendente
+                  ? `Média do colaborador: ${(Object.values(colab.autoAvaliacaoPendente.criterios || {}).reduce((a,b)=>a+b,0) / Math.max(1, Object.values(colab.autoAvaliacaoPendente.criterios || {}).length)).toFixed(2)} · Ela aparecerá ao lado das suas notas na próxima avaliação oficial.`
+                  : 'Antes da reunião, peça que o colaborador preencha como ele se vê.'}
+              </p>
+            </div>
+            <button onClick={() => setAutoModal(true)}
+              className="bg-azulCDB hover:bg-azulCDB/80 text-bordo font-display tracking-wider px-4 py-2 rounded-xl">
+              {colab.autoAvaliacaoPendente ? 'EDITAR AUTO-AVAL.' : 'INICIAR AUTO-AVAL.'}
+            </button>
+          </div>
+        </div>
+      )}
+
+      {!ultima ? (
+        <div className="bg-white rounded-2xl border-2 border-dashed border-bordo/20 p-8 text-center">
+          <p className="font-display text-2xl text-bordo">SEM AVALIAÇÕES AINDA</p>
+          <p className="text-bordo/60 mt-1 mb-4">Faça a primeira pra começar a medir desempenho.</p>
+          <button onClick={() => setTab('avaliar')}
+            className="bg-vermelho text-amarelo font-display text-lg px-5 py-2.5 rounded-xl tracking-wider">
+            INICIAR AVALIAÇÃO
+          </button>
+        </div>
+      ) : (
+        <>
+          <div className="grid md:grid-cols-3 gap-4">
+            <div className="bg-white rounded-2xl border-2 border-bordo/10 p-5 text-center">
+              <div className="text-xs uppercase font-bold text-bordo/60 tracking-wider">Última nota</div>
+              <div className="font-display text-7xl text-vermelho leading-none">{mediaUltima.toFixed(1)}</div>
+              <div className="text-bordo/70 text-sm mt-1">de 5,0 · {fmtDate(ultima.data)}</div>
+            </div>
+            <div className="md:col-span-2 bg-white rounded-2xl border-2 border-bordo/10 p-5">
+              <div className="text-xs uppercase font-bold text-bordo/60 tracking-wider mb-1">Recomendação</div>
+              <div className={`inline-block ${rec.cor} px-3 py-1 rounded-lg font-display text-lg tracking-wider mb-2`}>{rec.titulo.toUpperCase()}</div>
+              <p className="text-bordo font-semibold leading-snug">{rec.acao}</p>
+            </div>
+          </div>
+
+          <div className="grid md:grid-cols-2 gap-4">
+            <div className="bg-white rounded-2xl border-2 border-bordo/10 p-5">
+              <h3 className="font-display text-2xl text-bordo mb-3">💪 PONTOS FORTES</h3>
+              {pontos.fortes.length === 0
+                ? <p className="text-bordo/60 text-sm">Nenhum critério com nota ≥ 4 nesta avaliação.</p>
+                : pontos.fortes.map(p => (
+                  <div key={p.id} className="py-2 border-b border-bordo/5 flex justify-between gap-3">
+                    <span className="text-sm text-bordo">{p.label}</span>
+                    <Badge className="bg-green-100 text-green-800">{p.nota}/5</Badge>
+                  </div>
+                ))}
+            </div>
+            <div className="bg-white rounded-2xl border-2 border-bordo/10 p-5">
+              <h3 className="font-display text-2xl text-bordo mb-3">🎯 PONTOS A MELHORAR</h3>
+              {pontos.fracos.length === 0
+                ? <p className="text-bordo/60 text-sm">Nenhum critério com nota ≤ 3. Manda bem!</p>
+                : pontos.fracos.map(p => (
+                  <div key={p.id} className="py-2 border-b border-bordo/5 flex justify-between gap-3">
+                    <span className="text-sm text-bordo">{p.label}</span>
+                    <Badge className={p.nota < 2.5 ? 'bg-red-100 text-red-800' : 'bg-amber-100 text-amber-800'}>{p.nota}/5</Badge>
+                  </div>
+                ))}
+            </div>
+          </div>
+
+          {evolucao.length > 1 && (
+            <div className="bg-white rounded-2xl border-2 border-bordo/10 p-5">
+              <h3 className="font-display text-2xl text-bordo mb-3">📈 EVOLUÇÃO</h3>
+              <Sparkline pontos={evolucao} />
+            </div>
+          )}
+
+          <div className="bg-white rounded-2xl border-2 border-bordo/10 p-5">
+            <h3 className="font-display text-2xl text-bordo mb-3">📚 HISTÓRICO ({avaliacoes.length})</h3>
+            <div className="space-y-2">
+              {avaliacoes.map((a,i) => {
+                const m = calcularMedia(a);
+                return (
+                  <button key={a.id} onClick={() => setVerAval(a)}
+                    className="w-full flex items-center justify-between gap-3 py-3 px-3 rounded-lg hover:bg-cinzaCDB transition border-l-4 border-vermelho/40">
+                    <div className="text-left">
+                      <div className="font-bold text-bordo">{i === 0 ? '🟢 Mais recente · ' : ''}{fmtDate(a.data)}</div>
+                      <div className="text-xs text-bordo/60">por {a.avaliador || '—'} · cargo na época: {a.cargoNaEpoca || colab.cargo}</div>
+                    </div>
+                    <div className="text-right">
+                      <div className="font-display text-2xl text-vermelho">{m.toFixed(1)}</div>
+                      <div className="text-[10px] text-bordo/60 uppercase">{gerarRecomendacao(m, a.cargoNaEpoca || colab.cargo).nivel}</div>
+                    </div>
+                  </button>
+                );
+              })}
+            </div>
+          </div>
+        </>
+      )}
+
+      {editando && <FormColaborador colab={colab} onClose={() => setEditando(false)}
+        onSave={(c) => { dispatch({ type: 'UPDATE_COLAB', payload: c }); setEditando(false); }} />}
+      {verAval && <ModalVerAvaliacao avaliacao={verAval} colab={colab} onClose={() => setVerAval(null)} dispatch={dispatch} />}
+      {autoModal && <AutoAvaliacaoModal colab={colab} onClose={() => setAutoModal(false)} dispatch={dispatch} />}
+    </div>
+  );
+}
+
+function Sparkline({ pontos }) {
+  if (pontos.length < 2) return null;
+  const w = 600, h = 80, pad = 10;
+  const xs = pontos.map((_, i) => pad + i * ((w - pad*2) / (pontos.length - 1)));
+  const ys = pontos.map(p => h - pad - (p.media / 5) * (h - pad*2));
+  const path = xs.map((x,i) => `${i === 0 ? 'M' : 'L'} ${x} ${ys[i]}`).join(' ');
+  return (
+    <svg viewBox={`0 0 ${w} ${h}`} className="w-full h-24">
+      <path d={path} fill="none" stroke="#CC0000" strokeWidth="3" />
+      {xs.map((x,i) => (
+        <g key={i}>
+          <circle cx={x} cy={ys[i]} r="5" fill="#FECF23" stroke="#680505" strokeWidth="2" />
+          <text x={x} y={ys[i]-10} textAnchor="middle" className="text-[10px] fill-bordo font-bold">{pontos[i].media.toFixed(1)}</text>
+        </g>
+      ))}
+    </svg>
+  );
+}
+
+function ModalVerAvaliacao({ avaliacao, colab, onClose, dispatch }) {
+  const cargo = avaliacao.cargoNaEpoca || colab.cargo;
+  const todos = [...CRITERIOS_UNIVERSAIS, ...(CARGOS[cargo]?.criterios || [])];
+  const media = calcularMedia(avaliacao);
+  const rec = gerarRecomendacao(media, cargo);
+
+  const apagar = () => {
+    if (confirm('Apagar esta avaliação? Não dá pra desfazer.')) {
+      dispatch({ type: 'DEL_AVAL', colabId: colab.id, avalId: avaliacao.id });
+      onClose();
+    }
+  };
+
+  return (
+    <div className="fixed inset-0 bg-bordo/70 z-50 flex items-start justify-center p-0 md:p-4 overflow-y-auto">
+      <div className="bg-white rounded-2xl max-w-3xl w-full my-4 p-6 pop-in">
+        <div className="flex items-start justify-between mb-4">
+          <div>
+            <h2 className="font-display text-3xl text-bordo">AVALIAÇÃO · {fmtDate(avaliacao.data)}</h2>
+            <p className="text-bordo/70">Por {avaliacao.avaliador || '—'} · Cargo: {cargo}</p>
+          </div>
+          <button onClick={onClose} className="text-bordo text-2xl">×</button>
+        </div>
+
+        <div className={`${rec.cor} rounded-xl p-3 mb-4 flex items-center justify-between`}>
+          <div>
+            <div className="font-display text-xl">{rec.titulo.toUpperCase()}</div>
+            <div className="text-sm">{rec.acao}</div>
+          </div>
+          <div className="font-display text-5xl">{media.toFixed(1)}</div>
+        </div>
+
+        {avaliacao.auto && (() => {
+          const valsAuto = Object.values(avaliacao.auto.criterios || {}).filter(n => typeof n === 'number');
+          const mediaAuto = valsAuto.length ? valsAuto.reduce((a,b)=>a+b,0)/valsAuto.length : 0;
+          const gap = media - mediaAuto;
+          return (
+            <div className="bg-azulCDB/15 border-l-4 border-azulCDB rounded-r-lg p-3 mb-4">
+              <div className="flex items-center justify-between flex-wrap gap-2">
+                <div>
+                  <div className="font-display text-bordo">👤 AUTO-AVALIAÇÃO COMPARATIVA</div>
+                  <p className="text-sm text-bordo/80">
+                    Colaborador: <strong>{mediaAuto.toFixed(2)}</strong> · Gestor: <strong>{media.toFixed(2)}</strong>
+                  </p>
+                  {avaliacao.auto.observacoes && <p className="text-xs italic text-bordo/70 mt-1">"{avaliacao.auto.observacoes}"</p>}
+                </div>
+                <div className={`px-3 py-2 rounded-xl text-center
+                  ${Math.abs(gap) < 0.5 ? 'bg-green-100 text-green-800'
+                    : Math.abs(gap) < 1 ? 'bg-amber-100 text-amber-800'
+                    : 'bg-red-100 text-red-800'}`}>
+                  <div className="text-[10px] uppercase font-bold">Gap médio</div>
+                  <div className="font-display text-2xl">{gap > 0 ? '+' : ''}{gap.toFixed(2)}</div>
+                </div>
+              </div>
+            </div>
+          );
+        })()}
+
+        <h3 className="font-display text-xl text-bordo mt-4 mb-2">CRITÉRIOS UNIVERSAIS</h3>
+        {CRITERIOS_UNIVERSAIS.map(c => (
+          <RowCriterio key={c.id} label={c.label}
+            nota={avaliacao.criterios?.[c.id]}
+            notaAuto={avaliacao.auto?.criterios?.[c.id]} />
+        ))}
+
+        <h3 className="font-display text-xl text-bordo mt-5 mb-2">ESPECÍFICOS — {cargo.toUpperCase()}</h3>
+        {(CARGOS[cargo]?.criterios || []).map(c => (
+          <RowCriterio key={c.id} label={c.label}
+            nota={avaliacao.criterios?.[c.id]}
+            notaAuto={avaliacao.auto?.criterios?.[c.id]} />
+        ))}
+
+        {avaliacao.pontosFortes && (
+          <div className="mt-4">
+            <h3 className="font-display text-xl text-bordo mb-1">PONTOS FORTES (NOTA DO GESTOR)</h3>
+            <p className="text-bordo whitespace-pre-wrap text-sm bg-green-50 p-3 rounded-lg">{avaliacao.pontosFortes}</p>
+          </div>
+        )}
+        {avaliacao.pontosFracos && (
+          <div className="mt-4">
+            <h3 className="font-display text-xl text-bordo mb-1">PONTOS A MELHORAR (NOTA DO GESTOR)</h3>
+            <p className="text-bordo whitespace-pre-wrap text-sm bg-amber-50 p-3 rounded-lg">{avaliacao.pontosFracos}</p>
+          </div>
+        )}
+        {avaliacao.acoes && (
+          <div className="mt-4">
+            <h3 className="font-display text-xl text-bordo mb-1">PLANO DE AÇÃO</h3>
+            <p className="text-bordo whitespace-pre-wrap text-sm bg-cinzaCDB p-3 rounded-lg">{avaliacao.acoes}</p>
+          </div>
+        )}
+
+        <div className="flex gap-2 mt-6 no-print">
+          <button onClick={() => window.print()} className="flex-1 py-2.5 rounded-xl border-2 border-bordo text-bordo font-display tracking-wider">IMPRIMIR / PDF</button>
+          <button onClick={apagar} className="px-4 py-2.5 rounded-xl bg-red-700 text-white font-display tracking-wider">APAGAR</button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function RowCriterio({ label, nota, notaAuto }) {
+  if (nota === undefined || nota === null) {
+    return <div className="py-1.5 text-sm text-bordo/50 flex justify-between"><span>{label}</span><span>—</span></div>;
+  }
+  const gap = (typeof notaAuto === 'number') ? (nota - notaAuto) : null;
+  return (
+    <div className="py-1.5 border-b border-bordo/5">
+      <div className="flex justify-between items-center gap-3 mb-1 flex-wrap">
+        <span className="text-sm text-bordo flex-1 min-w-[60%]">{label}</span>
+        <div className="flex items-center gap-2 text-xs">
+          {typeof notaAuto === 'number' && (
+            <span className="bg-azulCDB/30 text-bordo px-2 py-0.5 rounded font-bold" title="Auto-avaliação">👤 {notaAuto}</span>
+          )}
+          {gap !== null && gap !== 0 && (
+            <span className={`px-2 py-0.5 rounded font-bold
+              ${Math.abs(gap) === 1 ? 'bg-amber-100 text-amber-800' : 'bg-red-100 text-red-800'}`}>
+              gap {gap > 0 ? '+' : ''}{gap}
+            </span>
+          )}
+          <span className="font-bold text-bordo">{nota} · {ESCALA_LABELS[nota]}</span>
+        </div>
+      </div>
+      <Bar value={nota} />
+    </div>
+  );
+}
+
+/* =========================================================================
+   9. PÁGINA: NOVA AVALIAÇÃO
+   ========================================================================= */
+
+function NovaAvaliacao({ state, dispatch, setTab, setSelectedId }) {
+  const ativos = state.colaboradores.filter(c => c.ativo !== false);
+  const [colabId, setColabId] = useState(ativos[0]?.id || '');
+  const colab = state.colaboradores.find(c => c.id === colabId);
+
+  const [data, setData] = useState(new Date().toISOString().slice(0, 10));
+  const [avaliador, setAvaliador] = useState('');
+  const [criterios, setCriterios] = useState({});
+  const [pontosFortes, setPontosFortes] = useState('');
+  const [pontosFracos, setPontosFracos] = useState('');
+  const [acoes, setAcoes] = useState('');
+
+  useEffect(() => { setCriterios({}); }, [colabId]);
+
+  if (ativos.length === 0) {
+    return (
+      <div className="max-w-3xl mx-auto px-4 py-10 text-center">
+        <div className="bg-white rounded-2xl border-2 border-dashed border-bordo/20 p-10">
+          <p className="font-display text-3xl text-bordo">CADASTRA UM COLABORADOR PRIMEIRO</p>
+          <button onClick={() => setTab('colab')}
+            className="mt-4 bg-vermelho text-amarelo font-display text-lg px-5 py-2.5 rounded-xl tracking-wider">
+            IR PARA COLABORADORES
+          </button>
+        </div>
+      </div>
+    );
+  }
+
+  const todos = [...CRITERIOS_UNIVERSAIS, ...(CARGOS[colab?.cargo]?.criterios || [])];
+  const preenchidos = todos.filter(c => criterios[c.id] !== undefined).length;
+  const pct = todos.length ? Math.round((preenchidos / todos.length) * 100) : 0;
+  const mediaParcial = preenchidos > 0
+    ? Object.values(criterios).reduce((a,b) => a+b, 0) / preenchidos
+    : 0;
+
+  const setNota = (id, nota) => setCriterios(prev => ({ ...prev, [id]: nota }));
+
+  const salvar = () => {
+    if (preenchidos < todos.length) {
+      if (!confirm(`Faltam ${todos.length - preenchidos} critérios sem nota. Salvar mesmo assim?`)) return;
+    }
+    const nova = {
+      id: uid(),
+      data,
+      avaliador: avaliador.trim(),
+      cargoNaEpoca: colab.cargo,
+      criterios: { ...criterios },
+      pontosFortes: pontosFortes.trim(),
+      pontosFracos: pontosFracos.trim(),
+      acoes: acoes.trim(),
+      criadaEm: new Date().toISOString(),
+    };
+    dispatch({ type: 'ADD_AVAL', colabId: colab.id, payload: nova });
+    setSelectedId(colab.id);
+    setTab('colab');
+  };
+
+  return (
+    <div className="max-w-4xl mx-auto px-4 py-6 space-y-5">
+      <h1 className="font-display text-5xl text-bordo">NOVA AVALIAÇÃO</h1>
+
+      <div className="bg-white rounded-2xl border-2 border-bordo/10 p-5 space-y-3">
+        <div className="grid md:grid-cols-3 gap-3">
+          <div>
+            <label className="text-xs uppercase font-bold text-bordo/70">Colaborador *</label>
+            <select value={colabId} onChange={e => setColabId(e.target.value)}
+              className="w-full px-3 py-2 rounded-lg border-2 border-bordo/20 focus:border-vermelho bg-white">
+              {ativos.map(c => <option key={c.id} value={c.id}>{c.nome} — {c.cargo}{c.autoAvaliacaoPendente ? ' · 👤 c/ auto' : ''}</option>)}
+            </select>
+          </div>
+          <div>
+            <label className="text-xs uppercase font-bold text-bordo/70">Data *</label>
+            <input type="date" value={data} onChange={e => setData(e.target.value)}
+              className="w-full px-3 py-2 rounded-lg border-2 border-bordo/20 focus:border-vermelho" />
+          </div>
+          <div>
+            <label className="text-xs uppercase font-bold text-bordo/70">Gestor avaliador</label>
+            <input value={avaliador} onChange={e => setAvaliador(e.target.value)} placeholder="seu nome"
+              className="w-full px-3 py-2 rounded-lg border-2 border-bordo/20 focus:border-vermelho" />
+          </div>
+        </div>
+
+        {colab?.autoAvaliacaoPendente && (() => {
+          const auto = colab.autoAvaliacaoPendente;
+          const valsAuto = Object.values(auto.criterios || {}).filter(n => typeof n === 'number');
+          const mediaAuto = valsAuto.length ? valsAuto.reduce((a,b)=>a+b,0)/valsAuto.length : 0;
+          const gapMedio = preenchidos > 0 ? (mediaParcial - mediaAuto) : null;
+          return (
+            <div className="bg-azulCDB/15 border-l-4 border-azulCDB rounded-r-lg p-3">
+              <div className="flex items-center justify-between flex-wrap gap-2">
+                <div>
+                  <div className="font-display text-bordo text-lg">👤 AUTO-AVALIAÇÃO DO COLABORADOR DETECTADA</div>
+                  <p className="text-sm text-bordo/80">Nota dele: <strong>{mediaAuto.toFixed(2)}</strong> · preenchida em {fmtDate(auto.data)}. Vai aparecer ao lado de cada critério abaixo.</p>
+                  {auto.observacoes && <p className="text-xs italic text-bordo/70 mt-1">"{auto.observacoes}"</p>}
+                </div>
+                {gapMedio !== null && (
+                  <div className={`px-3 py-2 rounded-xl text-center
+                    ${Math.abs(gapMedio) < 0.5 ? 'bg-green-100 text-green-800'
+                      : Math.abs(gapMedio) < 1 ? 'bg-amber-100 text-amber-800'
+                      : 'bg-red-100 text-red-800'}`}>
+                    <div className="text-[10px] uppercase font-bold">Gap médio</div>
+                    <div className="font-display text-2xl">{gapMedio > 0 ? '+' : ''}{gapMedio.toFixed(2)}</div>
+                  </div>
+                )}
+              </div>
+            </div>
+          );
+        })()}
+
+        <div className="bg-cinzaCDB rounded-xl p-3 flex items-center gap-3">
+          <div className="flex-1">
+            <div className="text-xs font-bold text-bordo/70 uppercase">Progresso</div>
+            <div className="w-full bg-white rounded-full h-3 mt-1">
+              <div className="bg-vermelho h-3 rounded-full transition-all" style={{ width: `${pct}%` }}></div>
+            </div>
+          </div>
+          <div className="text-right">
+            <div className="font-display text-2xl text-bordo">{preenchidos}/{todos.length}</div>
+            {preenchidos > 0 && <div className="text-xs text-bordo/70">média: <strong>{mediaParcial.toFixed(2)}</strong></div>}
+          </div>
+        </div>
+      </div>
+
+      <BlocoCriterios titulo="CRITÉRIOS UNIVERSAIS" subtitulo="Aplicáveis a todos os cargos da rede"
+        criterios={CRITERIOS_UNIVERSAIS} valores={criterios} setNota={setNota}
+        notasAuto={colab?.autoAvaliacaoPendente?.criterios} />
+
+      <BlocoCriterios
+        titulo={`ESPECÍFICOS · ${colab?.cargo.toUpperCase()}`}
+        subtitulo="Critérios específicos do cargo"
+        criterios={CARGOS[colab?.cargo]?.criterios || []} valores={criterios} setNota={setNota}
+        notasAuto={colab?.autoAvaliacaoPendente?.criterios} />
+
+      <div className="bg-white rounded-2xl border-2 border-bordo/10 p-5 space-y-3">
+        <h3 className="font-display text-2xl text-bordo">OBSERVAÇÕES DO GESTOR</h3>
+        <div>
+          <label className="text-xs uppercase font-bold text-bordo/70">Pontos fortes destacados</label>
+          <textarea rows="3" value={pontosFortes} onChange={e => setPontosFortes(e.target.value)}
+            placeholder="O que o colaborador faz de melhor neste ciclo?"
+            className="w-full px-3 py-2 rounded-lg border-2 border-bordo/20 focus:border-vermelho" />
+        </div>
+        <div>
+          <label className="text-xs uppercase font-bold text-bordo/70">Pontos a melhorar</label>
+          <textarea rows="3" value={pontosFracos} onChange={e => setPontosFracos(e.target.value)}
+            placeholder="O que precisa evoluir?"
+            className="w-full px-3 py-2 rounded-lg border-2 border-bordo/20 focus:border-vermelho" />
+        </div>
+        <div>
+          <label className="text-xs uppercase font-bold text-bordo/70">Plano de ação combinado</label>
+          <textarea rows="3" value={acoes} onChange={e => setAcoes(e.target.value)}
+            placeholder="Treinamentos, metas, prazos, próximos passos..."
+            className="w-full px-3 py-2 rounded-lg border-2 border-bordo/20 focus:border-vermelho" />
+        </div>
+      </div>
+
+      <button onClick={salvar}
+        className="w-full bg-vermelho hover:bg-bordo text-amarelo font-display text-2xl py-4 rounded-2xl tracking-wider shadow-lg">
+        SALVAR AVALIAÇÃO
+      </button>
+    </div>
+  );
+}
+
+function BlocoCriterios({ titulo, subtitulo, criterios, valores, setNota, notasAuto }) {
+  return (
+    <div className="bg-white rounded-2xl border-2 border-bordo/10 p-5">
+      <h2 className="font-display text-2xl text-bordo">{titulo}</h2>
+      <p className="text-bordo/60 text-sm mb-3">{subtitulo}</p>
+      {criterios.map(c => (
+        <CriterioInput key={c.id} criterio={c} valor={valores[c.id]}
+          notaAuto={notasAuto?.[c.id]}
+          onChange={(n) => setNota(c.id, n)} />
+      ))}
+    </div>
+  );
+}
+
+function CriterioInput({ criterio, valor, notaAuto, onChange }) {
+  const gap = (typeof valor === 'number' && typeof notaAuto === 'number') ? (valor - notaAuto) : null;
+  let gapColor = 'bg-cinzaCDB text-bordo';
+  if (gap !== null) {
+    if (gap === 0) gapColor = 'bg-green-100 text-green-800';
+    else if (Math.abs(gap) === 1) gapColor = 'bg-amber-100 text-amber-800';
+    else gapColor = 'bg-red-100 text-red-800';
+  }
+  return (
+    <div className="py-3 border-b border-bordo/10 last:border-0">
+      <div className="flex flex-wrap items-center justify-between gap-2 mb-2">
+        <span className="text-bordo font-semibold flex-1 min-w-[60%]">{criterio.label}</span>
+        <div className="flex items-center gap-2 text-xs">
+          {typeof notaAuto === 'number' && (
+            <span className="bg-azulCDB/30 text-bordo px-2 py-0.5 rounded font-bold" title="Auto-avaliação do colaborador">
+              👤 {notaAuto}
+            </span>
+          )}
+          {gap !== null && (
+            <span className={`${gapColor} px-2 py-0.5 rounded font-bold`} title="Gap entre sua nota e a do colaborador">
+              gap: {gap > 0 ? '+' : ''}{gap}
+            </span>
+          )}
+          <span className="text-bordo/60">
+            {valor !== undefined ? `${valor} · ${ESCALA_LABELS[valor]}` : 'sem nota'}
+          </span>
+        </div>
+      </div>
+      <div className="flex gap-1.5">
+        {[1,2,3,4,5].map(n => (
+          <button key={n} type="button" onClick={() => onChange(n)}
+            className={`flex-1 py-2 rounded-lg font-display text-lg transition border-2 relative
+              ${valor === n
+                ? 'bg-vermelho text-amarelo border-bordo'
+                : 'bg-cinzaCDB text-bordo border-transparent hover:border-vermelho'}`}>
+            {n}
+            {notaAuto === n && valor !== n && (
+              <span className="absolute -top-1.5 -right-1.5 w-4 h-4 rounded-full bg-azulCDB text-bordo text-[9px] font-bold flex items-center justify-center" title="Nota do colaborador">👤</span>
+            )}
+          </button>
+        ))}
+      </div>
+    </div>
+  );
+}
+
+/* =========================================================================
+   10. PÁGINA: CONFIGURAÇÕES (export/import + inativos)
+   ========================================================================= */
+
+function Configuracoes({ state, dispatch }) {
+  const fileRef = useRef(null);
+
+  const exportar = () => {
+    const blob = new Blob([JSON.stringify(state, null, 2)], { type: 'application/json' });
+    baixarArquivo(blob, `cdb_desempenho_${new Date().toISOString().slice(0,10)}.json`);
+  };
+
+  const importar = (e) => {
+    const f = e.target.files[0];
+    if (!f) return;
+    const reader = new FileReader();
+    reader.onload = () => {
+      try {
+        const dados = JSON.parse(reader.result);
+        if (!dados.colaboradores) throw new Error('arquivo inválido');
+        if (!confirm(`Importar ${dados.colaboradores.length} colaboradores? Isso vai SUBSTITUIR os dados atuais.`)) return;
+        dispatch({ type: 'REPLACE_ALL', payload: dados });
+        alert('Importado com sucesso!');
+      } catch {
+        alert('Arquivo inválido.');
+      }
+    };
+    reader.readAsText(f);
+  };
+
+  const exportarCSV = () => {
+    // Aba 1: resumo dos colaboradores
+    const linhas = [['== COLABORADORES (RESUMO) =='],
+      ['Nome','Cargo','Unidade','Inicio','TempoCasa','TotalAvaliacoes','UltimaData','UltimaMedia','Recomendacao','Status']];
+    state.colaboradores.forEach(c => {
+      const av = (c.avaliacoes || []).slice().sort((a,b) => new Date(b.data)-new Date(a.data));
+      const u = av[0];
+      const m = u ? calcularMedia(u) : '';
+      const r = u ? gerarRecomendacao(m, c.cargo).titulo : '';
+      linhas.push([c.nome, c.cargo, c.unidade || '', c.dataInicio || '', tempoCasa(c.dataInicio),
+        (c.avaliacoes||[]).length, u ? u.data : '', m ? m.toFixed(2) : '', r,
+        c.ativo === false ? 'Inativo' : 'Ativo']);
+    });
+    // Aba 2: detalhe de todas as avaliações
+    linhas.push([], ['== AVALIACOES (DETALHADO) =='],
+      ['Colaborador','Cargo','Data','Avaliador','MediaGeral','Recomendacao','MediaAuto','GapPercepcao','PontosFortes','PontosFracos','Acoes']);
+    state.colaboradores.forEach(c => {
+      (c.avaliacoes || []).forEach(a => {
+        const m = calcularMedia(a);
+        const cargoEpoca = a.cargoNaEpoca || c.cargo;
+        const r = gerarRecomendacao(m, cargoEpoca).titulo;
+        let mediaAuto = '', gap = '';
+        if (a.auto?.criterios) {
+          const va = Object.values(a.auto.criterios).filter(n => typeof n === 'number');
+          if (va.length) {
+            const ma = va.reduce((s,b) => s+b, 0) / va.length;
+            mediaAuto = ma.toFixed(2);
+            gap = (m - ma).toFixed(2);
+          }
+        }
+        linhas.push([c.nome, cargoEpoca, a.data, a.avaliador || '', m.toFixed(2), r,
+          mediaAuto, gap,
+          (a.pontosFortes || '').replace(/\n/g, ' '),
+          (a.pontosFracos || '').replace(/\n/g, ' '),
+          (a.acoes || '').replace(/\n/g, ' ')]);
+      });
+    });
+    const csv = linhas.map(l => l.map(x => `"${String(x).replace(/"/g,'""')}"`).join(',')).join('\n');
+    return new Blob(['\ufeff' + csv], { type: 'text/csv;charset=utf-8' });
+  };
+
+  const baixarArquivo = (blob, nome) => {
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url; a.download = nome; a.click();
+    URL.revokeObjectURL(url);
+    // Marca último backup
+    localStorage.setItem('cdb_ultimo_backup', new Date().toISOString());
+  };
+
+  const compartilharBackup = async (formato) => {
+    try {
+      const blob = formato === 'json'
+        ? new Blob([JSON.stringify(state, null, 2)], { type: 'application/json' })
+        : exportarCSV();
+      const dataStr = new Date().toISOString().slice(0,10);
+      const nome = `cdb_desempenho_${dataStr}.${formato}`;
+      const file = new File([blob], nome, { type: blob.type });
+
+      // Web Share API (iPhone abre menu nativo: Sheets, Drive, Mail, WhatsApp...)
+      if (navigator.canShare && navigator.canShare({ files: [file] })) {
+        await navigator.share({
+          files: [file],
+          title: 'Backup Desempenho CDB',
+          text: `Backup Cachorro do Bigode — ${dataStr}`,
+        });
+        localStorage.setItem('cdb_ultimo_backup', new Date().toISOString());
+      } else {
+        // Fallback (desktop): só baixa
+        baixarArquivo(blob, nome);
+      }
+    } catch (e) {
+      if (e.name !== 'AbortError') {
+        alert('Não consegui abrir o menu de compartilhamento. Use o botão "Baixar arquivo" como alternativa.');
+      }
+    }
+  };
+
+  const abrirNoSheets = async () => {
+    // Estratégia: gera CSV e abre o app Google Sheets (se instalado)
+    const blob = exportarCSV();
+    const dataStr = new Date().toISOString().slice(0,10);
+    const file = new File([blob], `cdb_desempenho_${dataStr}.csv`, { type: 'text/csv' });
+    if (navigator.canShare && navigator.canShare({ files: [file] })) {
+      try {
+        await navigator.share({ files: [file], title: 'Backup Desempenho CDB' });
+        localStorage.setItem('cdb_ultimo_backup', new Date().toISOString());
+        alert('No menu que apareceu, escolha "Google Sheets" ou "Salvar no Drive". Pronto!');
+      } catch (e) {
+        if (e.name !== 'AbortError') baixarArquivo(blob, `cdb_desempenho_${dataStr}.csv`);
+      }
+    } else {
+      baixarArquivo(blob, `cdb_desempenho_${dataStr}.csv`);
+      alert('Arquivo baixado. Abra o Google Drive/Sheets e faça upload do arquivo CSV.');
+    }
+  };
+
+  const enviarPorEmail = () => {
+    const dataStr = new Date().toISOString().slice(0,10);
+    const total = state.colaboradores.length;
+    const totalAv = state.colaboradores.reduce((s,c) => s + (c.avaliacoes||[]).length, 0);
+    const corpo = encodeURIComponent(
+      `Backup Desempenho Cachorro do Bigode\n` +
+      `Data: ${dataStr}\n` +
+      `Colaboradores: ${total}\n` +
+      `Avaliações totais: ${totalAv}\n\n` +
+      `O arquivo CSV está anexado.\n\n` +
+      `--\nMitawa Licenciadora`);
+    const assunto = encodeURIComponent(`Backup CDB Desempenho · ${dataStr}`);
+    window.location.href = `mailto:?subject=${assunto}&body=${corpo}`;
+    // Em paralelo, baixa o arquivo pra ela anexar manualmente
+    setTimeout(() => baixarArquivo(exportarCSV(), `cdb_desempenho_${dataStr}.csv`), 500);
+  };
+
+  const apagarTudo = () => {
+    if (!confirm('Tem certeza? Apaga TUDO. Sem volta.')) return;
+    if (!confirm('Última chance. Apagar mesmo?')) return;
+    dispatch({ type: 'REPLACE_ALL', payload: { colaboradores: [] } });
+  };
+
+  const inativos = state.colaboradores.filter(c => c.ativo === false);
+  const ultimoBackup = localStorage.getItem('cdb_ultimo_backup');
+  const diasDesdeBackup = ultimoBackup
+    ? Math.floor((new Date() - new Date(ultimoBackup)) / (1000 * 60 * 60 * 24))
+    : null;
+  const totalAval = state.colaboradores.reduce((s,c) => s + (c.avaliacoes||[]).length, 0);
+
+  return (
+    <div className="max-w-3xl mx-auto px-4 py-6 space-y-5">
+      <h1 className="font-display text-5xl text-bordo">CONFIGURAÇÕES</h1>
+
+      {/* STATUS DO BACKUP */}
+      <section className={`rounded-2xl border-2 p-5 ${
+        diasDesdeBackup === null ? 'bg-amber-50 border-amber-300'
+        : diasDesdeBackup > 7 ? 'bg-red-50 border-red-300'
+        : 'bg-green-50 border-green-300'
+      }`}>
+        <div className="flex items-center gap-3 mb-2">
+          <div className="text-3xl">
+            {diasDesdeBackup === null ? '⚠️' : diasDesdeBackup > 7 ? '🚨' : '✅'}
+          </div>
+          <div>
+            <h2 className="font-display text-2xl text-bordo">STATUS DO BACKUP</h2>
+            <p className="text-sm text-bordo/70">
+              {diasDesdeBackup === null
+                ? 'Você nunca fez backup. Faça agora para não perder dados.'
+                : diasDesdeBackup === 0
+                  ? `Backup feito hoje. Tudo seguro.`
+                  : diasDesdeBackup > 7
+                    ? `Último backup há ${diasDesdeBackup} dias. Faça backup AGORA.`
+                    : `Último backup há ${diasDesdeBackup} ${diasDesdeBackup === 1 ? 'dia' : 'dias'}.`}
+            </p>
+          </div>
+        </div>
+        <p className="text-xs text-bordo/60">
+          📊 {state.colaboradores.length} colaboradores · {totalAval} avaliações registradas
+        </p>
+      </section>
+
+      {/* BACKUP RÁPIDO (RECOMENDADO) */}
+      <section className="bg-white rounded-2xl border-2 border-bordo/10 p-5">
+        <h2 className="font-display text-2xl text-bordo mb-1">📤 BACKUP RÁPIDO</h2>
+        <p className="text-bordo/70 text-sm mb-4">
+          Toque num botão e escolha onde salvar. <strong>Recomendado: Google Sheets</strong> (vê tudo em planilha) ou <strong>Drive</strong> (guarda o arquivo).
+        </p>
+
+        <button onClick={abrirNoSheets}
+          className="w-full mb-2 bg-green-600 hover:bg-green-700 text-white font-display text-lg py-4 px-4 rounded-xl tracking-wider flex items-center justify-between">
+          <span>📊 SALVAR NO GOOGLE SHEETS</span>
+          <span className="text-xs opacity-80">recomendado</span>
+        </button>
+
+        <button onClick={() => compartilharBackup('csv')}
+          className="w-full mb-2 bg-azulCDB hover:bg-azulCDB/80 text-bordo font-display text-lg py-3 px-4 rounded-xl tracking-wider flex items-center justify-between">
+          <span>☁️ SALVAR NO DRIVE / ICLOUD</span>
+          <span className="text-xs">CSV</span>
+        </button>
+
+        <button onClick={enviarPorEmail}
+          className="w-full mb-2 bg-bordo hover:bg-bordo/80 text-amarelo font-display text-lg py-3 px-4 rounded-xl tracking-wider flex items-center justify-between">
+          <span>📧 ENVIAR POR EMAIL</span>
+          <span className="text-xs opacity-80">pra ti mesma</span>
+        </button>
+
+        <details className="mt-3">
+          <summary className="text-bordo/60 text-sm cursor-pointer hover:text-bordo">▸ Avançado: backup técnico (JSON)</summary>
+          <div className="mt-3 space-y-2">
+            <p className="text-xs text-bordo/60">JSON preserva 100% dos dados. Use para restauração ou migração entre dispositivos.</p>
+            <button onClick={() => compartilharBackup('json')}
+              className="w-full bg-cinzaCDB hover:bg-bordo/10 text-bordo font-display py-2.5 px-4 rounded-xl tracking-wider text-sm">
+              💾 BACKUP COMPLETO (JSON)
+            </button>
+            <button onClick={() => fileRef.current?.click()}
+              className="w-full border-2 border-bordo/30 text-bordo font-display py-2.5 px-4 rounded-xl tracking-wider text-sm">
+              📥 RESTAURAR DE JSON
+            </button>
+            <input ref={fileRef} type="file" accept="application/json" onChange={importar} className="hidden" />
+          </div>
+        </details>
+      </section>
+
+      {/* SINCRONIZAÇÃO AUTOMÁTICA COM GOOGLE SHEETS */}
+      <SecaoSyncSheets state={state} dispatch={dispatch} />
+
+      {/* INATIVOS */}
+      <section className="bg-white rounded-2xl border-2 border-bordo/10 p-5">
+        <h2 className="font-display text-2xl text-bordo mb-2">COLABORADORES INATIVOS ({inativos.length})</h2>
+        {inativos.length === 0
+          ? <p className="text-bordo/60">Nenhum.</p>
+          : inativos.map(c => (
+            <div key={c.id} className="flex items-center justify-between py-2 border-b border-bordo/5">
+              <span className="text-bordo">{c.nome} · {c.cargo}</span>
+              <button onClick={() => dispatch({ type: 'TOGGLE_ATIVO', id: c.id })}
+                className="text-vermelho text-sm font-bold hover:underline">Reativar</button>
+            </div>
+          ))}
+      </section>
+
+      {/* ZONA DE PERIGO */}
+      <section className="bg-red-50 rounded-2xl border-2 border-red-200 p-5">
+        <h2 className="font-display text-2xl text-red-800 mb-2">ZONA DE PERIGO</h2>
+        <p className="text-sm text-red-800/70 mb-3">⚠️ Faça backup antes. Apaga TUDO sem volta.</p>
+        <button onClick={apagarTudo} className="px-4 py-2.5 bg-red-700 text-white font-display tracking-wider rounded-xl">APAGAR TUDO</button>
+      </section>
+
+      <p className="text-center text-xs text-bordo/50">
+        Cachorro do Bigode · Desempenho v1.2 · Mitawa Licenciadora · 🌭
+      </p>
+    </div>
+  );
+}
+
+/* =========================================================================
+   11. APP RAIZ + REDUCER
+   ========================================================================= */
+
+function reducer(state, action) {
+  switch (action.type) {
+    case 'ADD_COLAB':
+      return { ...state, colaboradores: [...state.colaboradores, action.payload] };
+    case 'UPDATE_COLAB':
+      return { ...state, colaboradores: state.colaboradores.map(c => c.id === action.payload.id ? { ...c, ...action.payload } : c) };
+    case 'TOGGLE_ATIVO':
+      return { ...state, colaboradores: state.colaboradores.map(c => c.id === action.id ? { ...c, ativo: !(c.ativo !== false) } : c) };
+    case 'ADD_AVAL':
+      // Se houver auto-avaliação pendente, embute na avaliação oficial e limpa
+      return { ...state, colaboradores: state.colaboradores.map(c => {
+        if (c.id !== action.colabId) return c;
+        const aval = c.autoAvaliacaoPendente
+          ? { ...action.payload, auto: c.autoAvaliacaoPendente }
+          : action.payload;
+        return { ...c, avaliacoes: [...(c.avaliacoes || []), aval], autoAvaliacaoPendente: null };
+      }) };
+    case 'DEL_AVAL':
+      return { ...state, colaboradores: state.colaboradores.map(c =>
+        c.id === action.colabId ? { ...c, avaliacoes: (c.avaliacoes || []).filter(a => a.id !== action.avalId) } : c) };
+    case 'SAVE_AUTO':
+      return { ...state, colaboradores: state.colaboradores.map(c =>
+        c.id === action.colabId ? { ...c, autoAvaliacaoPendente: action.payload } : c) };
+    case 'CLEAR_AUTO':
+      return { ...state, colaboradores: state.colaboradores.map(c =>
+        c.id === action.colabId ? { ...c, autoAvaliacaoPendente: null } : c) };
+    case 'REPLACE_ALL':
+      return action.payload;
+    default:
+      return state;
+  }
+}
+
+/* =========================================================================
+   COMPONENTE: SEÇÃO DE SINCRONIZAÇÃO COM GOOGLE SHEETS
+   ========================================================================= */
+
+function SecaoSyncSheets({ state, dispatch }) {
+  const [url, setUrl] = useState(getSheetsUrl());
+  const [editando, setEditando] = useState(!getSheetsUrl());
+  const [status, setStatus] = useState('idle'); // idle | testing | ok | error
+  const [errMsg, setErrMsg] = useState('');
+  const [pulling, setPulling] = useState(false);
+  const [pushing, setPushing] = useState(false);
+
+  const conectado = !!getSheetsUrl();
+  const ultimaSync = getLastSync();
+  const pendente = isSyncPending();
+
+  const salvarUrl = async () => {
+    const limpa = url.trim();
+    if (!limpa) {
+      setSheetsUrl('');
+      setEditando(true);
+      setStatus('idle');
+      return;
+    }
+    if (!limpa.includes('script.google.com') || !limpa.includes('/exec')) {
+      setStatus('error');
+      setErrMsg('A URL precisa ser do Apps Script (deve conter script.google.com/.../exec)');
+      return;
+    }
+    setStatus('testing');
+    setErrMsg('');
+    try {
+      // Testa GET — deve responder com algo válido
+      const res = await fetch(limpa + '?action=read', { method: 'GET' });
+      if (!res.ok) throw new Error('HTTP ' + res.status);
+      const data = await res.json();
+      if (data.error) throw new Error(data.error);
+      setSheetsUrl(limpa);
+      setStatus('ok');
+      setEditando(false);
+    } catch (e) {
+      setStatus('error');
+      setErrMsg('Falha no teste: ' + e.message + '. Verifica se publicou como "Web App" e marcou acesso "Qualquer pessoa".');
+    }
+  };
+
+  const desconectar = () => {
+    if (!confirm('Desconectar do Sheets? Os dados continuam salvos localmente, mas param de sincronizar.')) return;
+    setSheetsUrl('');
+    setUrl('');
+    setEditando(true);
+    setStatus('idle');
+  };
+
+  const sincronizarAgora = async () => {
+    setPushing(true);
+    try {
+      await pushToSheets(state);
+      alert('✅ Sincronizado! Todos os dados estão na planilha agora.');
+      // força re-render
+      setStatus('ok');
+    } catch (e) {
+      alert('❌ Erro ao sincronizar: ' + e.message);
+      markSyncPending();
+    } finally {
+      setPushing(false);
+    }
+  };
+
+  const puxarDoSheets = async () => {
+    if (!confirm('Puxar dados da planilha vai SUBSTITUIR os dados locais. Continuar?')) return;
+    setPulling(true);
+    try {
+      const data = await pullFromSheets();
+      if (!data || !data.colaboradores) throw new Error('Planilha sem dados válidos');
+      dispatch({ type: 'REPLACE_ALL', payload: { colaboradores: data.colaboradores } });
+      alert('✅ Dados puxados da planilha. ' + data.colaboradores.length + ' colaboradores carregados.');
+    } catch (e) {
+      alert('❌ Erro: ' + e.message);
+    } finally {
+      setPulling(false);
+    }
+  };
+
+  if (!conectado || editando) {
+    return (
+      <section className="bg-white rounded-2xl border-2 border-azulCDB/40 p-5">
+        <div className="flex items-center gap-2 mb-1">
+          <span className="text-2xl">🔗</span>
+          <h2 className="font-display text-2xl text-bordo">SINCRONIZAR COM GOOGLE SHEETS</h2>
+        </div>
+        <p className="text-bordo/70 text-sm mb-3">
+          Conecta o app a uma planilha do Sheets via Apps Script. <strong>Todos os gestores que colarem a mesma URL veem os mesmos dados em tempo real.</strong>
+        </p>
+
+        <div className="bg-amarelo/30 border border-amarelo rounded-lg p-3 mb-3">
+          <p className="text-xs text-bordo">
+            <strong>Antes de colar a URL aqui</strong>, tu precisa: (1) criar uma planilha no Sheets, (2) abrir Apps Script, (3) colar o script que te enviei, (4) publicar como Web App. Tem o guia completo no arquivo <code>GUIA_SHEETS_SYNC.md</code>.
+          </p>
+        </div>
+
+        <label className="text-xs uppercase font-bold text-bordo/70">URL do Apps Script (termina em /exec)</label>
+        <input type="url" value={url} onChange={e => setUrl(e.target.value)}
+          placeholder="https://script.google.com/macros/s/AKfycb.../exec"
+          className="w-full px-3 py-2 mt-1 rounded-lg border-2 border-bordo/20 focus:border-azulCDB focus:outline-none font-mono text-xs" />
+
+        {status === 'error' && (
+          <div className="mt-2 bg-red-50 border border-red-300 rounded-lg p-2 text-xs text-red-800">
+            ❌ {errMsg}
+          </div>
+        )}
+
+        <div className="flex gap-2 mt-3">
+          {conectado && <button onClick={() => setEditando(false)}
+            className="px-4 py-2.5 border-2 border-bordo/30 text-bordo font-display tracking-wider rounded-xl text-sm">CANCELAR</button>}
+          <button onClick={salvarUrl} disabled={status === 'testing'}
+            className="flex-1 bg-azulCDB hover:bg-azulCDB/80 disabled:opacity-50 text-bordo font-display tracking-wider py-2.5 rounded-xl text-sm">
+            {status === 'testing' ? 'TESTANDO...' : '🔌 CONECTAR'}
+          </button>
+        </div>
+      </section>
+    );
+  }
+
+  // Conectado
+  return (
+    <section className="bg-white rounded-2xl border-2 border-green-300 p-5">
+      <div className="flex items-center justify-between flex-wrap gap-2 mb-2">
+        <div className="flex items-center gap-2">
+          <span className="text-2xl">{pendente ? '⚠️' : '✅'}</span>
+          <h2 className="font-display text-2xl text-bordo">SHEETS SYNC {pendente ? 'PENDENTE' : 'ATIVO'}</h2>
+        </div>
+        <button onClick={() => setEditando(true)}
+          className="text-xs text-bordo/60 hover:text-bordo underline">trocar URL</button>
+      </div>
+
+      <p className="text-xs text-bordo/70 mb-3">
+        {pendente
+          ? '⚠️ Há mudanças locais ainda não sincronizadas. Toca "Sincronizar agora" pra enviar.'
+          : ultimaSync
+            ? `Última sincronização: ${new Date(ultimaSync).toLocaleString('pt-BR')}`
+            : 'Conectado, mas ainda não sincronizou nada.'}
+      </p>
+
+      <div className="grid grid-cols-2 gap-2">
+        <button onClick={sincronizarAgora} disabled={pushing}
+          className="bg-green-600 hover:bg-green-700 disabled:opacity-50 text-white font-display tracking-wider py-2.5 rounded-xl text-sm">
+          {pushing ? '⏳ ENVIANDO...' : '⬆️ ENVIAR LOCAL → SHEETS'}
+        </button>
+        <button onClick={puxarDoSheets} disabled={pulling}
+          className="bg-bordo hover:bg-bordo/80 disabled:opacity-50 text-amarelo font-display tracking-wider py-2.5 rounded-xl text-sm">
+          {pulling ? '⏳ PUXANDO...' : '⬇️ PUXAR SHEETS → LOCAL'}
+        </button>
+      </div>
+
+      <button onClick={desconectar}
+        className="w-full mt-2 text-xs text-red-700 hover:underline">
+        Desconectar do Sheets
+      </button>
+    </section>
+  );
+}
+
+function App() {
+  const [state, setState] = useState(loadState);
+  const [tab, setTab] = useState('dashboard');
+  const [selectedId, setSelectedId] = useState(null);
+  const [syncStatus, setSyncStatus] = useState('idle'); // idle | syncing | ok | error | offline
+  const stateRef = useRef(state);
+  stateRef.current = state;
+
+  // Persistência local sempre
+  useEffect(() => { saveState(state); }, [state]);
+
+  // PULL inicial e ao reabrir o app
+  useEffect(() => {
+    if (!getSheetsUrl()) return;
+    const fazerPull = async () => {
+      setSyncStatus('syncing');
+      try {
+        const data = await pullFromSheets();
+        if (data && data.colaboradores) {
+          setState({ colaboradores: data.colaboradores });
+        }
+        setSyncStatus('ok');
+      } catch {
+        setSyncStatus('offline');
+      }
+    };
+    fazerPull();
+    // Re-puxa quando a aba volta a ficar visível
+    const onVisible = () => { if (document.visibilityState === 'visible') fazerPull(); };
+    document.addEventListener('visibilitychange', onVisible);
+    return () => document.removeEventListener('visibilitychange', onVisible);
+  }, []);
+
+  // PUSH com debounce ao mudar dados (1.5s sem mexer = envia)
+  const initialMount = useRef(true);
+  useEffect(() => {
+    if (initialMount.current) { initialMount.current = false; return; }
+    if (!getSheetsUrl()) return;
+    markSyncPending();
+    setSyncStatus('syncing');
+    const t = setTimeout(async () => {
+      try {
+        await pushToSheets(stateRef.current);
+        setSyncStatus('ok');
+      } catch {
+        setSyncStatus('offline');
+      }
+    }, 1500);
+    return () => clearTimeout(t);
+  }, [state]);
+
+  const dispatch = (action) => setState(prev => reducer(prev, action));
+
+  return (
+    <div className="min-h-screen paper-bg">
+      <Header tab={tab} setTab={(t) => { setTab(t); if (t !== 'colab') setSelectedId(null); }}
+        syncStatus={syncStatus} sheetsActive={!!getSheetsUrl()} />
+      <main>
+        {tab === 'dashboard' && <Dashboard state={state} setTab={setTab} setSelectedId={setSelectedId} />}
+        {tab === 'colab'     && <ListaColaboradores state={state} dispatch={dispatch} selectedId={selectedId} setSelectedId={setSelectedId} setTab={setTab} />}
+        {tab === 'avaliar'   && <NovaAvaliacao state={state} dispatch={dispatch} setTab={setTab} setSelectedId={setSelectedId} />}
+        {tab === 'config'    && <Configuracoes state={state} dispatch={dispatch} />}
+      </main>
+    </div>
+  );
+}
+
+ReactDOM.createRoot(document.getElementById('root')).render(<App />);
+</script>
+</body>
+</html>
